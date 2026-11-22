@@ -1,0 +1,27 @@
+# Node.js
+node_modules/
+npm-debug.log*
+.env
+.env.local
+
+# Empaquetado / salida
+dist/
+build/
+
+# Datos locales y secretos (nunca subir)
+config.json
+cache.json
+conversations.json
+users.json
+access_codes.json
+secret.key
+
+# Editores / sistema
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.lnk
+
+# Copias anidadas / backups accidentales
+AI_HUB_v*/

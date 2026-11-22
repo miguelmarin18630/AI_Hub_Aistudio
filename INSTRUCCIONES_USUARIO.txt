@@ -1,0 +1,203 @@
+================================================================================
+                    AI HUB · GUIA DE INSTALACION Y USO
+================================================================================
+
+Bienvenido a AI Hub.
+AI Hub te permite chatear con modelos de inteligencia artificial (gratuitos y
+de pago), generar imagenes/video y trabajar con archivos de tus proyectos desde
+el navegador o instalada como aplicacion (PWA) en tu ordenador o movil.
+
+IMPORTANTE SOBRE TU PRIVACIDAD:
+Todos tus proveedores, claves API, modelos en cache, favoritos, consumo e
+historial de conversaciones se guardan UNICAMENTE en tu propio disco duro.
+
+
+--------------------------------------------------------------------------------
+1. QUE NECESITAS INSTALAR ANTES DE EMPEZAR
+--------------------------------------------------------------------------------
+
+OBLIGATORIO:
+  1) Node.js version 22 o superior
+     - Descargalo gratis desde: https://nodejs.org (elige la version LTS 22+).
+     - Durante la instalacion en Windows, deja marcadas todas las opciones por
+       defecto y pulsa Siguiente hasta terminar.
+     - Para comprobar que quedo instalado, abre una terminal (PowerShell o
+       Simbolo del sistema) y escribe:
+           node -v
+       Debe mostrar v22.x.x o superior.
+
+OPCIONAL (solo si quieres usar modelos 100% gratis y sin internet en tu PC):
+  2) Ollama
+     - Descargalo gratis desde: https://ollama.com
+     - Una vez instalado, abre una terminal y descarga un modelo, por ejemplo:
+           ollama pull qwen2.5-coder:7b
+     - Mientras Ollama este abierto en tu PC, AI Hub detectara tus modelos
+       locales automaticamente.
+
+
+--------------------------------------------------------------------------------
+2. COMO INSTALAR Y ARRANCAR AI HUB
+--------------------------------------------------------------------------------
+
+Paso 1: Descomprime o clona la carpeta AI_Hub_Aistudio en tu ordenador (por
+        ejemplo en C:\Proyectos\AI_Hub_Aistudio en Windows o en Documentos en
+        macOS).
+
+Paso 2: Arranca la aplicacion:
+
+  EN WINDOWS:
+  - Haz doble clic en:  Iniciar_Web.bat
+    (La primera vez tardara unos segundos en instalar automaticamente las
+     dependencias necesarias con "npm install".)
+  - Cuando aparezca el mensaje:
+        AI Hub web ... http://0.0.0.0:3000
+    deja esa ventana abierta mientras uses la aplicacion.
+  - Si prefieres arrancarla en segundo plano sin ventana negra, usa:
+        Iniciar_Web.vbs
+
+  EN MACOS / LINUX:
+  - Haz doble clic en:  Iniciar_Web.command
+    (Si macOS avisa la primera vez, haz clic derecho -> Abrir -> Abrir.)
+  - O desde la terminal dentro de la carpeta del proyecto:
+        npm install
+        npm start
+
+Paso 3: Abre tu navegador (Chrome, Edge, Safari o Firefox) y entra en:
+            http://127.0.0.1:3000
+        O entra directamente en la direccion web privada si te han dado un
+        enlace (por ejemplo http://ai_hub.marinweb.org o https://ai_hub.marinweb.org).
+
+Paso 4: ACCESO SIN USUARIO NI CONTRASENA (CODIGO DE ACCESO):
+        - Si alguien te ha invitado a su AI Hub: solo introduce el codigo
+          personal que te enviaron (por ejemplo AH-ANA42K-9F3X-7M2Q) y pulsa
+          "Entrar". Si incluyeron proveedores iniciales, se guardaran
+          automaticamente en tu disco duro al entrar.
+        - Si instalas AI Hub para ti por primera vez: te pedira crear un
+          codigo maestro de administrador (minimo 6 digitos o caracteres). Desde el boton
+          "Accesos" (arriba a la derecha) podras generar codigos personales
+          para otras personas y revocarlos al instante cuando quieras.
+
+
+--------------------------------------------------------------------------------
+3. COMO INSTALARLA COMO APLICACION EN TU ORDENADOR O MOVIL (PWA)
+--------------------------------------------------------------------------------
+
+AI Hub funciona como aplicacion instalable (sin barras del navegador y con
+icono propio):
+
+  - En Windows, macOS o Android (Chrome / Edge):
+    Pulsa el boton "Instalar" en la barra superior de AI Hub (o en el menu
+    "..." en movil) y acepta la instalacion.
+
+  - En iPhone / iPad (Safari):
+    Pulsa "Instalar app" para ver la guia rapida:
+    1) Toca el boton Compartir de Safari.
+    2) Elige "Anadir a pantalla de inicio".
+    3) Pulsa "Anadir".
+
+
+--------------------------------------------------------------------------------
+4. COMO ANADIR PROVEEDORES Y CLAVES API
+--------------------------------------------------------------------------------
+
+Para chatear con modelos gratuitos en la nube, la opcion mas sencilla es
+OpenRouter (tiene muchos modelos gratuitos sin tarjeta):
+
+  A) CONFIGURAR OPENROUTER (RECOMENDADO PARA EMPEZAR GRATIS):
+     1. Crea una cuenta gratuita en: https://openrouter.ai
+     2. Ve a https://openrouter.ai/keys y crea una clave (API Key).
+     3. En AI Hub, pulsa "Ajustes" (arriba a la derecha).
+     4. En la seccion OPENROUTER, pega tu clave y pulsa "Guardar".
+     5. Pulsa "Comprobar" para confirmar que la clave funciona.
+
+  B) ANADIR OTROS PROVEEDORES (OpenAI, Gemini, Groq, DeepSeek, Mistral,
+     Together AI, LM Studio, etc.):
+     1. Pulsa "Ajustes" -> seccion PROVEEDORES PROPIOS.
+     2. Elige un proveedor del desplegable (se rellenaran el nombre y la URL
+        automaticamente) o elige "Personalizado" para cualquier API compatible
+        con OpenAI (por ejemplo LM Studio en http://localhost:1234/v1).
+     3. Pega tu clave API de ese proveedor.
+     4. Marca si quieres usarlo para "Programacion" (chat/codigo) y/o
+        "Imagen y video".
+     5. Pulsa "Anadir y leer modelos".
+
+  C) USAR MODELOS LOCALES SIN CLAVE (OLLAMA):
+     - No necesitas clave API. Solo ten Ollama abierto en tu equipo y pulsa
+       "Actualizar" en AI Hub.
+
+
+--------------------------------------------------------------------------------
+5. COMO VER, BUSCAR Y ORGANIZAR LOS MODELOS
+--------------------------------------------------------------------------------
+
+1. Pulsa "Actualizar" (o la tecla F5) para descargar el catalogo de modelos
+   mas reciente y sus precios en vivo.
+2. En la columna izquierda, los modelos estan organizados asi:
+     PROVEEDOR  ->  GRUPO  ->  GRATIS (ordenados por relevancia)
+                           ->  DE PAGO (de menor a mayor precio)
+3. Puedes filtrar por grupo con las pestanas superiores:
+     - Todos / Codigo / Razona / Vision / Chat / Imagen / Video
+4. Puedes usar el buscador, filtrar solo "Gratis" o "Favoritos" (estrella),
+   y plegar o desplegar cualquier proveedor o grupo haciendo clic en su titulo.
+5. Haz clic en cualquier modelo para empezar a chatear o generar imagenes/video.
+
+
+--------------------------------------------------------------------------------
+6. DONDE SE GUARDAN TUS DATOS Y COMO HACER COPIA DE SEGURIDAD
+--------------------------------------------------------------------------------
+
+Todos tus datos (clave de OpenRouter, proveedores propios, modelos en cache,
+favoritos, consumo e historial de chats) se guardan en TU propio equipo:
+
+  - De forma automatica en el almacenamiento local del navegador (IndexedDB).
+  - En Chrome o Edge (ordenador), ademas puedes ir a:
+        Ajustes -> MIS DATOS (DISCO DURO LOCAL)
+    y pulsar "Vincular archivo en mi disco" para guardar un archivo real
+    (aihub-datos-<usuario>.json) en la carpeta que quieras (por ejemplo
+    Documentos) que se sincronizara automaticamente cada vez que hagas cambios.
+  - En cualquier navegador o movil puedes usar:
+        "Exportar copia (.json)" -> descarga todos tus datos a un archivo.
+        "Importar copia (.json)" -> restaura tus proveedores, claves e
+                                    historial en otro ordenador o navegador.
+
+IMPORTANTE: Tu archivo .json contiene tus claves API privadas. Guardalo en un
+lugar seguro y no lo compartas con nadie.
+
+
+--------------------------------------------------------------------------------
+7. ATAJOS DE TECLADO UTILES
+--------------------------------------------------------------------------------
+
+  Ctrl + N       -> Nuevo chat
+  Ctrl + B       -> Mostrar u ocultar panel de modelos
+  Ctrl + I       -> Ir directo al cuadro de mensaje
+  Ctrl + F       -> Buscar modelo
+  F5             -> Actualizar catalogos de modelos
+  Ctrl + /  o ?  -> Abrir guia completa de atajos
+  Enter          -> Enviar mensaje (Shift + Enter para salto de linea)
+  Esc            -> Cerrar ventanas emergentes
+
+
+--------------------------------------------------------------------------------
+8. SOLUCION DE PROBLEMAS FRECUENTES
+--------------------------------------------------------------------------------
+
+- "No se encontro Node.js" o "Se necesita Node.js 22 o superior":
+  Instala Node.js 22 LTS desde https://nodejs.org y reinicia el equipo.
+
+- La pagina http://127.0.0.1:3000 no carga:
+  Comprueba que ejecutaste Iniciar_Web.bat y que no cerraste su ventana.
+  Si el puerto 3000 esta ocupado por otro programa, arranca con otro puerto
+  definiendo la variable PORT (por ejemplo PORT=3005).
+
+- "Falta la clave de este proveedor":
+  Entra en Ajustes y guarda tu clave de OpenRouter o del proveedor elegido.
+
+- Error 429 o "sin saldo":
+  Si usas un modelo gratuito de OpenRouter, puede tener limite temporal de
+  peticiones; prueba otro modelo gratuito de la lista. Si es de pago, revisa
+  el saldo de tu cuenta en ese proveedor.
+
+- No aparecen mis modelos de Ollama:
+  Asegurate de que Ollama este ejecutandose y pulsa Actualizar (F5).
+================================================================================

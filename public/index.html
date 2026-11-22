@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Hub · chat con modelos de IA</title>
+  <meta name="description" content="Chat con modelos de IA gratuitos y baratos: OpenCode, Claude Code, Ollama y OpenRouter.">
+  <meta property="og:title" content="AI Hub">
+  <meta property="og:description" content="Chat con modelos de IA gratuitos y baratos: OpenCode, Claude Code, Ollama y OpenRouter.">
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+  <meta name="googlebot" content="noindex, nofollow">
+  <meta name="theme-color" content="#0b0d12">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="AI Hub">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="icon" href="/static/marin-mark-128.png" type="image/png">
+  <link rel="stylesheet" href="/static/styles.css?v=15">
+</head>
+<body>
+  <div id="app" hidden>
+    <header class="topbar">
+      <div class="topbar-left">
+        <div class="brand">
+          <img class="logo" src="/static/marin-mark-128.png" alt="Marín" width="34" height="34">
+          <div class="brand-text">
+            <strong>AI HUB</strong>
+            <small>Chat con modelos de IA <span id="app-version"></span></small>
+          </div>
+        </div>
+        <button id="btn-models-mobile" class="btn ghost mobile-only" title="Mostrar modelos">☰ Modelos</button>
+      </div>
+      <div class="top-actions">
+        <button id="btn-project" class="chip" title="Elegir proyecto">Proyecto</button>
+        <button id="btn-history" class="btn ghost" title="Conversaciones guardadas">Historial</button>
+        <button id="btn-refresh" class="btn ghost" title="Actualizar catálogos (F5)">⟳ Actualizar</button>
+        <button id="btn-detail" class="btn ghost tablet-only" title="Detalles del modelo">Detalles</button>
+        <button id="btn-settings" class="btn ghost">⚙ Ajustes</button>
+        <button id="btn-admin" class="btn ghost" hidden>🔑 Accesos</button>
+        <button id="btn-install" class="btn ghost install-btn" hidden title="Instalar AI Hub como aplicación">⬇ Instalar</button>
+        <button id="btn-shortcuts" class="icon-btn" title="Atajos de teclado (Ctrl+/)">⌨</button>
+        <button id="btn-help" class="icon-btn" title="Cómo funciona la conversación">?</button>
+        <button id="btn-user" class="chip" title="Tu cuenta">·</button>
+        <button id="btn-logout" class="btn ghost">Salir</button>
+      </div>
+      <button id="btn-mobile-menu" class="btn ghost mobile-only" title="Menú">⋯</button>
+      <div id="mobile-menu" class="mobile-menu" hidden>
+        <button type="button" data-action="models">☰ Modelos</button>
+        <button type="button" data-action="project">📁 Proyecto</button>
+        <button type="button" data-action="history">🕘 Historial</button>
+        <button type="button" data-action="detail">ℹ Detalles del modelo</button>
+        <button type="button" data-action="refresh">⟳ Actualizar catálogo</button>
+        <button type="button" data-action="settings">⚙ Ajustes</button>
+        <button type="button" data-action="admin" id="menu-admin" hidden>🔑 Accesos</button>
+        <button type="button" data-action="account">👤 Mi cuenta</button>
+        <button type="button" data-action="install" id="menu-install" hidden>⬇ Instalar app</button>
+        <button type="button" data-action="shortcuts">⌨ Atajos de teclado</button>
+        <button type="button" data-action="help">? Cómo funciona</button>
+        <button type="button" data-action="logout" class="danger-text">Salir</button>
+      </div>
+    </header>
+
+    <div class="layout" id="layout">
+      <aside class="side-rail" id="rail-open" title="Mostrar modelos (Ctrl+B)">
+        <span class="rail-arrow">▶</span>
+        <span class="rail-text">M O D E L O S</span>
+      </aside>
+
+      <aside id="sidebar">
+        <div class="side-head">
+          <span class="side-title">PROVEEDOR</span>
+          <button id="btn-collapse" class="icon-btn" title="Ocultar panel (Ctrl+B)">◀</button>
+        </div>
+        <div class="provider-select" id="provider-select">
+          <button type="button" id="provider-current" class="provider-current">Todos los proveedores</button>
+          <div id="provider-menu" class="provider-menu" hidden></div>
+        </div>
+
+        <div class="tabs group-tabs" id="tabs">
+          <button class="tab active" data-group="all">Todos</button>
+          <button class="tab" data-group="code">Código</button>
+          <button class="tab" data-group="reasoning">Razona</button>
+          <button class="tab" data-group="vision">Visión</button>
+          <button class="tab" data-group="chat">Chat</button>
+          <button class="tab" data-group="image">Imagen</button>
+          <button class="tab" data-group="video">Vídeo</button>
+        </div>
+
+        <div class="toolbar">
+          <div class="search-box">
+            <span class="search-icon">⌕</span>
+            <input id="search" type="search" placeholder="Buscar modelo… (Ctrl+F)" autocomplete="off">
+          </div>
+          <select id="filter" class="select" title="Filtrar">
+            <option value="all">Todos</option>
+            <option value="free">Gratis</option>
+            <option value="paid">De pago</option>
+            <option value="favorites">Favoritos</option>
+          </select>
+          <select id="sort" class="select" title="Ordenar">
+            <option value="price-asc">Relevancia / Precio ↑</option>
+            <option value="price-desc">Precio ↓</option>
+            <option value="name">Nombre</option>
+            <option value="context">Contexto ↓</option>
+          </select>
+        </div>
+
+        <div id="model-list" class="model-list"></div>
+
+        <div class="legend">
+          <span>Gratis por relevancia · Pago ↑</span>
+          <span id="model-count"></span>
+        </div>
+      </aside>
+
+      <main id="center">
+        <div class="conv-head">
+          <div class="conv-titles">
+            <strong id="conv-title">Elige un modelo</strong>
+            <small id="conv-sub">Selecciona un modelo en la columna izquierda</small>
+            <small id="conv-context" class="usage-dim"></small>
+          </div>
+          <button id="btn-clear" class="btn ghost small" title="Nuevo chat (Ctrl+N)">＋ Nuevo chat</button>
+        </div>
+
+        <div id="messages" class="messages"></div>
+
+        <div id="composer" class="composer">
+          <textarea id="prompt" rows="2" placeholder="Escribe tu mensaje… (Enter para enviar, Shift+Enter para salto de línea)"></textarea>
+          <div class="composer-row">
+            <label class="check" id="tools-label" title="El modelo podrá leer y escribir en tu proyecto">
+              <input type="checkbox" id="use-tools">
+              <span>Acceso a archivos del proyecto</span>
+            </label>
+            <span id="chat-status" class="status"></span>
+            <button id="btn-send" class="btn primary">Enviar</button>
+            <button id="btn-stop" class="btn danger" hidden>Detener</button>
+          </div>
+        </div>
+
+        <div id="generator" class="generator" hidden>
+          <div class="gen-head">
+            <strong id="gen-title">Generar</strong>
+            <small id="gen-model"></small>
+          </div>
+          <textarea id="gen-prompt" rows="3" placeholder="Describe lo que quieres generar…"></textarea>
+          <div class="gen-row">
+            <label>Relación
+              <select id="gen-aspect" class="select">
+                <option value="">Automática</option>
+                <option value="1:1">1:1</option>
+                <option value="4:3">4:3</option>
+                <option value="3:4">3:4</option>
+                <option value="16:9">16:9</option>
+                <option value="9:16">9:16</option>
+              </select>
+            </label>
+            <label id="gen-duration-wrap" hidden>Duración
+              <select id="gen-duration" class="select">
+                <option value="">Automática</option>
+                <option value="4">4 s</option>
+                <option value="6">6 s</option>
+                <option value="8">8 s</option>
+              </select>
+            </label>
+            <label id="gen-resolution-wrap" hidden>Resolución
+              <select id="gen-resolution" class="select">
+                <option value="">Automática</option>
+                <option value="360p">360p</option>
+                <option value="480p">480p</option>
+                <option value="720p">720p</option>
+                <option value="1080p">1080p</option>
+              </select>
+            </label>
+            <button id="btn-generate" class="btn primary">Generar</button>
+            <button id="btn-gen-cancel" class="btn danger" hidden>Cancelar</button>
+          </div>
+          <div id="gen-result" class="gen-result"></div>
+        </div>
+      </main>
+
+      <aside id="detail">
+        <section class="detail-card" id="model-detail">
+          <small class="empty">Elige un modelo para ver su precio y detalles.</small>
+        </section>
+        <section class="detail-card">
+          <h3>CONSUMO</h3>
+          <p id="usage-text" class="usage">Elige un modelo para ver su consumo.</p>
+          <p id="quota-text" class="usage-dim"></p>
+        </section>
+        <section class="detail-card files-card">
+          <div class="files-head">
+            <h3>ARCHIVOS DEL PROYECTO</h3>
+            <button id="btn-file-up" class="icon-btn" title="Carpeta superior" hidden>↑</button>
+          </div>
+          <small id="files-project" class="usage-dim"></small>
+          <div id="file-list" class="file-list"></div>
+        </section>
+      </aside>
+    </div>
+  </div>
+
+  <div id="login-screen" class="center-screen" hidden>
+    <div class="card login-card">
+      <div class="login-brand">
+        <img class="logo logo-lg" src="/static/marin-logo.png" alt="Marín · marinweb.org" width="72" height="72">
+        <div>
+          <h1>AI HUB</h1>
+          <p>Chat con modelos de IA <span id="login-version"></span></p>
+        </div>
+      </div>
+
+      <form id="setup-view" hidden>
+        <p class="login-note">Primera vez: crea tu código maestro de administrador (mínimo 6 dígitos o caracteres).</p>
+        <label>Tu nombre
+          <input id="setup-name" type="text" value="admin" autocomplete="name">
+        </label>
+        <label>Código maestro de administrador
+          <input id="setup-password" type="password" placeholder="Mínimo 6 dígitos o caracteres" autocomplete="new-password">
+        </label>
+        <button class="btn primary block" type="submit">Activar AI Hub</button>
+      </form>
+
+      <form id="code-view" hidden>
+        <p class="login-note">Introduce tu código personal de invitación o tu código de administrador. Tus datos se guardarán solo en tu disco duro.</p>
+        <label>Código de acceso
+          <input id="access-code-input" type="password" placeholder="Ej.: AH-ANA42K-9F3X-7M2Q" autocomplete="off">
+        </label>
+        <button class="btn primary block" type="submit">Entrar</button>
+        <button type="button" id="btn-toggle-classic" class="btn ghost block small" style="margin-top:8px">Usar acceso clásico (usuario y contraseña)</button>
+      </form>
+
+      <form id="login-view" hidden>
+        <label>Usuario
+          <input id="login-name" type="text" autocomplete="username">
+        </label>
+        <label>Contraseña
+          <input id="login-password" type="password" autocomplete="current-password">
+        </label>
+        <button class="btn primary block" type="submit">Entrar</button>
+        <button type="button" id="btn-toggle-code" class="btn ghost block small" style="margin-top:8px">Volver a código de acceso</button>
+      </form>
+
+      <p id="login-error" class="error" hidden></p>
+      <button type="button" id="btn-install-login" class="btn ghost block install-btn" hidden>⬇ Instalar AI Hub como app</button>
+    </div>
+  </div>
+
+  <div id="offline-banner" class="offline-banner" hidden>
+    <span class="offline-dot"></span>
+    <span>Sin conexión — Mostrando datos en caché</span>
+  </div>
+  <div id="backdrop" class="backdrop" hidden></div>
+  <div id="modal-root"></div>
+  <div id="toast-root"></div>
+
+  <script src="/static/app.js?v=14"></script>
+</body>
+</html>

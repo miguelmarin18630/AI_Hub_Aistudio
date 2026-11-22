@@ -1,0 +1,5 @@
+{
+  "name": "AI Hub",
+  "description": "Chat con modelos de IA gratuitos y baratos: OpenCode, Claude Code, Ollama y OpenRouter.",
+  "requestFramePermissions": []
+}
