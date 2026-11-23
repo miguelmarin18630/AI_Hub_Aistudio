@@ -1,5 +1,5 @@
 import * as api from "./api.ts";
-import { BASE_PROVIDERS } from "./catalog.ts";
+import * as catalog from "./catalog.ts";
 import type {
   CustomProviderRecord,
   ModelData,
@@ -9,6 +9,30 @@ import type {
 } from "./types.ts";
 
 export const PRESETS: ProviderPreset[] = [
+  {
+    id: "openrouter",
+    name: "OpenRouter",
+    base: "https://openrouter.ai/api/v1",
+    glyph: "↗",
+    color: "#f2b84b",
+    help: "Texto, imagen y vídeo con precios en vivo. Clave en openrouter.ai/keys",
+  },
+  {
+    id: "ollama",
+    name: "Ollama (Local)",
+    base: "http://127.0.0.1:11434/v1",
+    glyph: "⬢",
+    color: "#4ec9b0",
+    help: "Modelos locales 100 % gratis (no necesita clave). Abre Ollama en tu PC.",
+  },
+  {
+    id: "opencode",
+    name: "OpenCode",
+    base: "https://opencode.ai/zen/v1",
+    glyph: "◇",
+    color: "#8b7bff",
+    help: "OpenCode Zen (compatible con OpenAI). Clave en opencode.ai",
+  },
   {
     id: "openai",
     name: "OpenAI",
@@ -267,7 +291,7 @@ export function getCustom(cfg: UserConfig, pid: string): CustomProviderRecord | 
 
 export function uniqueId(cfg: UserConfig, presetId: string): string {
   const taken = new Set([
-    ...BASE_PROVIDERS.map((p) => p.id),
+    ...catalog.BASE_PROVIDERS.map((p) => p.id),
     ...records(cfg).map((r) => r.id),
   ]);
   let candidate = presetId;
@@ -295,6 +319,13 @@ export async function fetchCustomModels(record: CustomProviderRecord): Promise<M
   const base = String(record.base || "").trim().replace(/\/+$/, "");
   if (!/^https?:\/\//.test(base)) {
     throw new api.ApiError("La URL debe empezar por http:// o https://");
+  }
+  const lowBase = base.toLowerCase();
+  if (lowBase.includes("openrouter.ai")) {
+    return await catalog.fetchOpenRouterCatalog(record.id, false, false);
+  }
+  if (record.id.toLowerCase().includes("ollama") || lowBase.includes(":11434")) {
+    return await catalog.fetchOllamaCatalog(record.id, base);
   }
   const resp = await api.requestJson<{ data?: Array<Record<string, unknown>> }>(
     `${base}/models`,

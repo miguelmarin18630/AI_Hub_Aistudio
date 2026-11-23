@@ -1,10 +1,10 @@
 # AI Hub
 
-Una aplicación web multiusuario en español para ver **qué modelos de IA puedes usar gratis y cuáles son los más baratos**, ordenados por relevancia y precio, en cuatro proveedores base (**OpenCode**, **Claude Code**, **Ollama** y **OpenRouter**) más cualquier proveedor compatible con OpenAI que añadas tú. También sirve para usarlos directamente desde el navegador: chatear con memoria de conversación, leer y editar archivos de un proyecto, generar imágenes o vídeos y llevar el control de consumo por modelo.
+Una aplicación web multiusuario en español para ver **qué modelos de IA puedes usar gratis y cuáles son los más baratos**, ordenados por relevancia y precio, con los proveedores que tú añadas (**OpenRouter**, **Ollama**, **OpenCode**, **OpenAI**, **Google Gemini**, **Groq**, **DeepSeek**, **Mistral** o cualquier servidor compatible con OpenAI). También sirve para usarlos directamente desde el navegador: chatear con memoria de conversación, leer y editar archivos de un proyecto, generar imágenes o vídeos y llevar el control de consumo por modelo.
 
 Hecha con **Node.js 22**, **Express**, **TypeScript** y frontend ligero sin frameworks.
 
-La **versión** se muestra dinámicamente en la cabecera y en la pantalla de acceso (por ejemplo, `v1.6.0`).
+La **versión** se muestra dinámicamente en la cabecera y en la pantalla de acceso (por ejemplo, `v1.11.0`).
 
 ---
 
@@ -29,10 +29,11 @@ npm run dev
 
 Abre `http://127.0.0.1:3000` en el navegador. La primera vez te pedirá crear tu **código maestro de administrador**. Después, desde **🔑 Accesos** en la barra superior podrás generar **códigos personales de invitación** (sin usuario ni contraseña, con límite de usos, caducidad, paquete inicial opcional de proveedores y revocación inmediata).
 
-Opcional, para aprovechar los proveedores locales:
+Todos los proveedores se añaden desde **⚙ Ajustes → Proveedores** (no hay proveedores preinstalados obligatorios):
 
-- **Ollama** → [ollama.com](https://ollama.com) (con el servidor en marcha: `ollama serve`).
-- **OpenRouter** → consigue tu clave en [openrouter.ai/keys](https://openrouter.ai/keys) y pégala en **⚙ Ajustes** (o define `OPENROUTER_API_KEY`).
+- **OpenRouter** → consigue tu clave en [openrouter.ai/keys](https://openrouter.ai/keys) y añádelo desde el preset `OpenRouter`.
+- **Ollama (Local)** → [ollama.com](https://ollama.com) (con `ollama serve` en marcha) y añádelo desde el preset `Ollama (Local)` sin clave.
+- **OpenCode**, **OpenAI**, **Google Gemini**, **Groq**, **DeepSeek**, **Mistral**, **LM Studio**, etc. → añádelos desde sus presets o como proveedor personalizado.
 
 Para instrucciones específicas de macOS/Linux consulta `LEEME-MAC.md`, y para publicar en tu propio dominio con Cloudflare Tunnel consulta `WEB.md`.
 
@@ -68,15 +69,15 @@ Los tokens son una **estimación** (≈4 caracteres/token); el gasto real lo mar
 
 ### Cómo se calculan los precios
 
-- Los catálogos se descargan **en vivo**: OpenRouter (`/models`, `/images/models`, `/videos/models`), OpenCode Zen y Ollama (`/api/tags` más modelos curados). Claude Code muestra sus alias con los precios de Anthropic.
+- Los catálogos se descargan **en vivo** para cada proveedor que añadas: OpenRouter (`/models`, `/images/models`, `/videos/models` con precios en tiempo real), Ollama (`/api/tags` más modelos curados locales) y cualquier API compatible con OpenAI (`/models`).
 - **Gratis** = 0 $ por token (o `:free` / `-free` / modelos locales en Ollama).
 - En programación se muestra **entrada / salida por 1M de tokens**; en imagen, **por imagen o megapíxel**; en vídeo, **por segundo**.
 
-### Añadir proveedores propios
+### Añadir proveedores
 
-En **⚙ Ajustes → Proveedores propios** puedes elegir un preset (**OpenAI**, **Google Gemini**, **Groq**, **DeepSeek**, **Mistral**, **Together AI**, **Perplexity**, **Fireworks AI**, **xAI**, **Cerebras**, **SambaNova**, **Hugging Face**, **Novita AI**, **SiliconFlow**, **Hyperbolic**, **Cohere**, **Alibaba/Qwen**, **Moonshot**, **MiniMax**) o **Personalizado** para cualquier servidor compatible con OpenAI (por ejemplo LM Studio en `http://localhost:1234/v1`).
+En **⚙ Ajustes → Proveedores** no viene ningún proveedor preinstalado: tú eliges los que quieras desde un preset (**OpenRouter**, **Ollama (Local)**, **OpenCode**, **OpenAI**, **Google Gemini**, **Groq**, **DeepSeek**, **Mistral**, **Together AI**, **Perplexity**, **Fireworks AI**, **xAI**, **Cerebras**, **SambaNova**, **Hugging Face**, **Novita AI**, **SiliconFlow**, **Hyperbolic**, **Cohere**, **Alibaba/Qwen**, **Moonshot**, **MiniMax**) o **Personalizado** para cualquier servidor compatible con OpenAI (por ejemplo LM Studio en `http://localhost:1234/v1`).
 
-Al seleccionar un preset se rellena la URL base y una ayuda orientativa. La clave, los proveedores, el caché de modelos, los favoritos, el consumo y el historial se guardan únicamente en el **disco duro local de cada usuario** (IndexedDB + sincronización opcional con un archivo `.json` en tu disco y botones de exportar/importar en **⚙ Ajustes**).
+Al seleccionar un preset se rellena la URL base y una ayuda orientativa. Los proveedores, las claves, el caché de modelos, los favoritos, el consumo y el historial se guardan únicamente en el **disco duro local de cada usuario** (IndexedDB + sincronización opcional con un archivo `.json` en tu disco y botones de exportar/importar en **⚙ Ajustes**).
 
 ### Archivos del proyecto (agente)
 

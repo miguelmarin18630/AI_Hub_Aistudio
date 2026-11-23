@@ -100,30 +100,31 @@ icono propio):
 4. COMO ANADIR PROVEEDORES Y CLAVES API
 --------------------------------------------------------------------------------
 
-Para chatear con modelos gratuitos en la nube, la opcion mas sencilla es
-OpenRouter (tiene muchos modelos gratuitos sin tarjeta):
+AI Hub no trae proveedores preinstalados: cada usuario anade unicamente los
+proveedores que quiere usar desde "Ajustes -> PROVEEDORES". Todos se guardan en
+tu propio disco duro.
 
-  A) CONFIGURAR OPENROUTER (RECOMENDADO PARA EMPEZAR GRATIS):
+  A) ANADIR OPENROUTER (RECOMENDADO PARA EMPEZAR GRATIS):
      1. Crea una cuenta gratuita en: https://openrouter.ai
      2. Ve a https://openrouter.ai/keys y crea una clave (API Key).
-     3. En AI Hub, pulsa "Ajustes" (arriba a la derecha).
-     4. En la seccion OPENROUTER, pega tu clave y pulsa "Guardar".
-     5. Pulsa "Comprobar" para confirmar que la clave funciona.
+     3. En AI Hub, pulsa "Ajustes" -> seccion PROVEEDORES.
+     4. Elige "OpenRouter" en el desplegable, pega tu clave y pulsa
+        "Anadir y leer modelos".
+     5. Podras pulsar "Comprobar" en su fila para ver saldo y limite gratuito.
 
-  B) ANADIR OTROS PROVEEDORES (OpenAI, Gemini, Groq, DeepSeek, Mistral,
-     Together AI, LM Studio, etc.):
-     1. Pulsa "Ajustes" -> seccion PROVEEDORES PROPIOS.
+  B) ANADIR OLLAMA (LOCAL, SIN CLAVE):
+     1. Ten Ollama abierto en tu ordenador.
+     2. En AI Hub, pulsa "Ajustes" -> seccion PROVEEDORES.
+     3. Elige "Ollama (Local)" en el desplegable, deja la clave vacia y pulsa
+        "Anadir y leer modelos".
+
+  C) ANADIR OPENCODE U OTROS PROVEEDORES (OpenAI, Gemini, Groq, DeepSeek,
+     Mistral, Together AI, LM Studio, etc.):
+     1. Pulsa "Ajustes" -> seccion PROVEEDORES.
      2. Elige un proveedor del desplegable (se rellenaran el nombre y la URL
         automaticamente) o elige "Personalizado" para cualquier API compatible
         con OpenAI (por ejemplo LM Studio en http://localhost:1234/v1).
-     3. Pega tu clave API de ese proveedor.
-     4. Marca si quieres usarlo para "Programacion" (chat/codigo) y/o
-        "Imagen y video".
-     5. Pulsa "Anadir y leer modelos".
-
-  C) USAR MODELOS LOCALES SIN CLAVE (OLLAMA):
-     - No necesitas clave API. Solo ten Ollama abierto en tu equipo y pulsa
-       "Actualizar" en AI Hub.
+     3. Pega tu clave API (si la requiere) y pulsa "Anadir y leer modelos".
 
 
 --------------------------------------------------------------------------------

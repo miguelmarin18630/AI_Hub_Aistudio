@@ -166,12 +166,28 @@ function checkFreeModelRules(): void {
   console.log("✓ Reglas de clasificación gratis/pago OK");
 }
 
+function checkNoBuiltInProviders(): void {
+  assert.equal(
+    catalog.BASE_PROVIDERS.length,
+    0,
+    "No debe haber proveedores integrados por defecto (Ollama, OpenCode y OpenRouter son proveedores añadidos)"
+  );
+  const presetIds = new Set(custom.PRESETS.map((p) => p.id));
+  for (const id of ["openrouter", "ollama", "opencode"]) {
+    assert.ok(presetIds.has(id), `Falta el preset '${id}' en custom.PRESETS`);
+  }
+  console.log("✓ Sin proveedores integrados (OpenRouter, Ollama y OpenCode como proveedores añadidos) OK");
+}
+
 function checkStartupScripts(): void {
   const root = process.cwd();
   for (const file of [
     "Iniciar_Todo.bat",
     "Iniciar_Todo.vbs",
     "Instalar_Inicio_Windows.bat",
+    "Instalar_AutoSync_GitHub.bat",
+    "Actualizar_Desde_GitHub.bat",
+    "Actualizar_Desde_GitHub.vbs",
     "Iniciar_Web.bat",
     "Iniciar_Web.vbs",
     "Iniciar_Tunel.bat",
@@ -272,6 +288,7 @@ async function main(): Promise<void> {
   checkModelGroups();
   checkPwaCompliance();
   checkFreeModelRules();
+  checkNoBuiltInProviders();
   checkStartupScripts();
   checkAccessCodes();
   await checkLiveServer();

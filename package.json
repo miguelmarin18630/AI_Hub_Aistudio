@@ -1,9 +1,9 @@
 {
   "name": "ai-hub-web",
-  "version": "1.10.0",
+  "version": "1.11.0",
   "private": true,
   "type": "module",
-  "description": "AI Hub · Chat con modelos de IA gratuitos y baratos: OpenCode, Claude Code, Ollama y OpenRouter.",
+  "description": "AI Hub · Chat con modelos de IA gratuitos y baratos con los proveedores que tú añadas.",
   "scripts": {
     "dev": "tsx watch server.ts",
     "build": "tsc --noEmit",

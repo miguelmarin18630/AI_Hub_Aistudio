@@ -26,40 +26,9 @@ const GROUP_LABELS: Record<ModelGroup, string> = Object.fromEntries(
   MODEL_GROUPS.map((g) => [g.id, g.label])
 ) as Record<ModelGroup, string>;
 
-export const BASE_PROVIDERS: ProviderInfo[] = [
-  {
-    id: "ollama",
-    name: "Ollama",
-    sub: "Local, 100 % gratis",
-    glyph: "⬢",
-    color: "#4ec9b0",
-    categories: ["code"],
-  },
-  {
-    id: "opencode",
-    name: "OpenCode",
-    sub: "Agente de código en terminal",
-    glyph: "◇",
-    color: "#8b7bff",
-    categories: ["code"],
-  },
-  {
-    id: "claude",
-    name: "Claude Code",
-    sub: "Anthropic, en terminal",
-    glyph: "✳",
-    color: "#e89b5a",
-    categories: ["code"],
-  },
-  {
-    id: "openrouter",
-    name: "OpenRouter",
-    sub: "Texto, imagen y vídeo por API",
-    glyph: "↗",
-    color: "#f2b84b",
-    categories: ["code", "media"],
-  },
-];
+// Todos los proveedores (incluidos OpenRouter, Ollama y OpenCode) se añaden
+// desde Ajustes → Proveedores y se guardan en el disco duro de cada usuario.
+export const BASE_PROVIDERS: ProviderInfo[] = [];
 
 const CLAUDE_ALIASES: Array<[string, string, string, number, number, string]> = [
   [
@@ -754,14 +723,63 @@ export function buildOllama(tags: Array<Record<string, unknown>>): ModelData[] {
   return models;
 }
 
+export async function fetchOpenRouterCatalog(
+  providerId: string,
+  fetchImagePrices = false,
+  persistCache = false
+): Promise<ModelData[]> {
+  const textRaw = await api.openrouterModelsText();
+  const textModels = buildOpenRouterText(textRaw);
+  let images: ModelData[] = [];
+  let videos: ModelData[] = [];
+  try {
+    images = buildOpenRouterImages(await api.openrouterModelsImage());
+  } catch {
+    // image models optional if endpoint fails transiently
+  }
+  try {
+    videos = buildOpenRouterVideos(await api.openrouterModelsVideo());
+  } catch {
+    // video models optional if endpoint fails transiently
+  }
+  const existingPrices = persistCache ? cachedImagePrices() : {};
+  if (images.length) {
+    if (fetchImagePrices || !Object.keys(existingPrices).length) {
+      const prices = await api.imageEndpointPrices(images.map((m) => m.uid));
+      if (Object.keys(prices).length) {
+        applyImagePrices(images, prices);
+        if (persistCache) storeImagePrices(prices);
+      }
+    } else {
+      applyImagePrices(images, existingPrices);
+    }
+  }
+  return [...textModels, ...images, ...videos].map((m) => ({
+    ...m,
+    provider: providerId,
+  }));
+}
+
+export async function fetchOllamaCatalog(
+  providerId: string,
+  baseUrl?: string | null
+): Promise<ModelData[]> {
+  const tags = await api.ollamaTags(baseUrl);
+  return buildOllama(tags).map((m) => ({
+    ...m,
+    provider: providerId,
+  }));
+}
+
 export async function refreshAll(
   _cfg: UserConfig,
   providers?: string[],
   fetchImagePrices = false,
   persistCache = true
 ): Promise<Record<string, { models: ModelData[]; error: string | null }>> {
-  const wanted = new Set(providers || ["ollama", "opencode", "claude", "openrouter"]);
+  const wanted = new Set(providers || BASE_PROVIDERS.map((p) => p.id));
   const result: Record<string, { models: ModelData[]; error: string | null }> = {};
+  if (!wanted.size) return result;
   let textModels: ModelData[] = [];
 
   if (wanted.has("openrouter") || wanted.has("claude") || wanted.has("opencode")) {

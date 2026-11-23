@@ -112,6 +112,35 @@ function normalizeVault(raw) {
   }
   base.migrated_from_server = Boolean(raw.migrated_from_server);
   base.updated_at = Number(raw.updated_at || Date.now());
+
+  // Migrar clave legada openrouter_api_key a proveedor añadido en custom_providers
+  const legacyOrKey = String(base.openrouter_api_key || "").trim();
+  if (legacyOrKey) {
+    const existingOr = base.custom_providers.find((p) =>
+      String(p.base || "").toLowerCase().includes("openrouter.ai")
+    );
+    if (existingOr) {
+      if (!existingOr.key) existingOr.key = legacyOrKey;
+    } else {
+      const migratedId = "custom_openrouter";
+      base.custom_providers.unshift({
+        id: migratedId,
+        name: "OpenRouter",
+        base: "https://openrouter.ai/api/v1",
+        key: legacyOrKey,
+        glyph: "↗",
+        color: "#f2b84b",
+        categories: ["code", "media"],
+      });
+      if (Array.isArray(base.models_by_provider.openrouter) && !base.models_by_provider[migratedId]) {
+        base.models_by_provider[migratedId] = base.models_by_provider.openrouter.map((m) => ({
+          ...m,
+          provider: migratedId,
+        }));
+      }
+    }
+    base.openrouter_api_key = "";
+  }
   return base;
 }
 
@@ -267,6 +296,7 @@ async function maybeMigrateLegacyVault() {
       };
     }
     state.vault.migrated_from_server = true;
+    state.vault = normalizeVault(state.vault);
     await saveUserVault();
     toast("Tus proveedores, claves e historial anteriores se han guardado en tu disco duro local.", "ok");
   } catch {
@@ -402,13 +432,15 @@ function exportVaultBackup() {
 
 function getClientAuth(providerId) {
   if (!state.vault) return null;
+  const rec = (state.vault.custom_providers || []).find((p) => p.id === providerId);
+  if (rec) {
+    return { api_key: String(rec.key || "").trim(), base: String(rec.base || "").trim() };
+  }
   if (providerId === "openrouter") {
     const key = String(state.vault.openrouter_api_key || "").trim();
-    return key ? { api_key: key } : null;
+    return key ? { api_key: key, base: "https://openrouter.ai/api/v1" } : null;
   }
-  const rec = (state.vault.custom_providers || []).find((p) => p.id === providerId);
-  if (!rec) return null;
-  return { api_key: String(rec.key || "").trim(), base: String(rec.base || "").trim() };
+  return null;
 }
 
 function uniqueCustomProviderId(presetId) {
@@ -896,10 +928,31 @@ async function applyBootstrapPack(pack) {
   let keysAdded = 0;
 
   const orKey = typeof pack.openrouter_api_key === "string" ? pack.openrouter_api_key.trim() : "";
-  if (orKey && !state.vault.openrouter_api_key) {
-    state.vault.openrouter_api_key = orKey;
-    changed = true;
-    keysAdded += 1;
+  if (orKey) {
+    if (!Array.isArray(state.vault.custom_providers)) state.vault.custom_providers = [];
+    const existingOr = state.vault.custom_providers.find((p) =>
+      String(p.base || "").toLowerCase().includes("openrouter.ai")
+    );
+    if (existingOr) {
+      if (!existingOr.key) {
+        existingOr.key = orKey;
+        changed = true;
+        keysAdded += 1;
+      }
+    } else {
+      state.vault.custom_providers.push({
+        id: uniqueCustomProviderId("openrouter"),
+        name: "OpenRouter",
+        base: "https://openrouter.ai/api/v1",
+        key: orKey,
+        glyph: "↗",
+        color: "#f2b84b",
+        categories: ["code", "media"],
+      });
+      changed = true;
+      providersAdded += 1;
+      keysAdded += 1;
+    }
   }
 
   if (Array.isArray(pack.custom_providers) && pack.custom_providers.length) {
@@ -1317,7 +1370,7 @@ async function loadCatalog() {
   renderProviders();
   renderModels();
   renderProjectChip();
-  if (!state.models.length) {
+  if (state.providers.length > 0 && !state.models.length) {
     await refreshCatalog(false);
   }
   if (!state.selected && state.models.length) {
@@ -1444,7 +1497,7 @@ function historyTokens() {
 function modelContextLimit(model) {
   const c = Number(model && model.context);
   if (c > 0) return c;
-  return (model && model.provider === "ollama") ? 8192 : 32768;
+  return (model && String(model.provider || "").toLowerCase().includes("ollama")) ? 8192 : 32768;
 }
 
 function isModelContextDisabled(model) {
@@ -1459,7 +1512,10 @@ function sortFreeModels(items) {
   return [...items].sort((a, b) => {
     if (state.sort === "name") return a.name.localeCompare(b.name);
     if (state.sort === "context") return (b.context || 0) - (a.context || 0) || (b.relevance_score || 0) - (a.relevance_score || 0);
-    if (a.provider === "ollama" && b.provider === "ollama") {
+    if (
+      String(a.provider || "").toLowerCase().includes("ollama") &&
+      String(b.provider || "").toLowerCase().includes("ollama")
+    ) {
       const ia = a.extra && a.extra.installed ? 1 : 0;
       const ib = b.extra && b.extra.installed ? 1 : 0;
       if (ia !== ib) return ib - ia;
@@ -1523,7 +1579,14 @@ function renderModels() {
   if (!items.length) {
     const empty = document.createElement("div");
     empty.className = "model-list-empty";
-    empty.textContent = "No hay modelos. Pulsa «Actualizar» para descargar el catálogo.";
+    if (!state.providers.length) {
+      empty.innerHTML = `
+        <p style="margin:0 0 10px">Todavía no has añadido ningún proveedor (OpenRouter, Ollama, OpenCode, OpenAI, Gemini, Groq…).</p>
+        <button type="button" class="btn primary small" id="btn-empty-add-provider">⚙ Añadir proveedores</button>`;
+      empty.querySelector("#btn-empty-add-provider")?.addEventListener("click", () => openSettings("main"));
+    } else {
+      empty.textContent = "No hay modelos para este filtro. Pulsa «Actualizar» para descargar el catálogo.";
+    }
     root.appendChild(empty);
     return;
   }
@@ -2455,8 +2518,6 @@ async function openSettings(tab = "main") {
     return;
   }
   const vault = state.vault || defaultVault();
-  const orKey = String(vault.openrouter_api_key || "").trim();
-  const orHint = orKey ? orKey.slice(-4) : "";
   const customProviders = vault.custom_providers || [];
   const presets = state.presets || (state.settings && state.settings.presets) || [];
   const cachedCount = state.models.length;
@@ -2464,16 +2525,20 @@ async function openSettings(tab = "main") {
   const favCount = (vault.favorite_models || []).length;
   const isCodeSession = String(state.user.id || "").startsWith("code-");
 
-  const providerRows = customProviders.map((item) => `
+  const providerRows = customProviders.map((item) => {
+    const isOr = String(item.base || "").toLowerCase().includes("openrouter.ai");
+    return `
     <tr>
       <td><span style="color:${esc(item.color)}">${esc(item.glyph)}</span> ${esc(item.name)}</td>
       <td>${esc(item.base)}</td>
       <td>${item.key ? "guardada en tu disco" : "sin clave"}</td>
       <td class="user-actions">
+        ${isOr ? `<button class="btn ghost mini" data-check-openrouter="${esc(item.id)}">Comprobar</button>` : ""}
         <button class="btn ghost mini" data-edit-provider="${esc(item.id)}">Editar</button>
         <button class="btn danger mini" data-delete-provider="${esc(item.id)}">Quitar</button>
       </td>
-    </tr>`).join("");
+    </tr>`;
+  }).join("");
 
   const codeRows = codes.map((item) => {
     const usesText = item.max_uses > 0 ? `${item.uses}/${item.max_uses}` : `${item.uses}/∞`;
@@ -2523,7 +2588,7 @@ async function openSettings(tab = "main") {
         <div class="vault-head">
           <div>
             <strong>Tus proveedores, claves, modelos e historial solo se guardan en tu propio equipo</strong>
-            <div class="vault-meta">${customProviders.length} proveedor${customProviders.length === 1 ? "" : "es"} propio${customProviders.length === 1 ? "" : "s"} · ${cachedCount} modelos en caché · ${histCount} conversacion${histCount === 1 ? "" : "es"} · ${favCount} favoritos</div>
+            <div class="vault-meta">${customProviders.length} proveedor${customProviders.length === 1 ? "" : "es"} añadido${customProviders.length === 1 ? "" : "s"} · ${cachedCount} modelos en caché · ${histCount} conversacion${histCount === 1 ? "" : "es"} · ${favCount} favoritos</div>
           </div>
           ${diskBadge}
         </div>
@@ -2540,29 +2605,19 @@ async function openSettings(tab = "main") {
       </div>
     </section>
     <section id="settings-main">
-      <h3>OPENROUTER</h3>
-      <p class="hint">Clave guardada en tu disco duro: ${orKey ? "sí" + (orHint ? " (…" + esc(orHint) + ")" : "") : "no"}</p>
-      <div class="modal-row">
-        <input id="openrouter-key" type="password" placeholder="Pega la clave (o déjala vacía para no cambiarla)" autocomplete="off">
-        <button id="btn-check-key" class="btn ghost" style="flex:0 0 auto">Comprobar</button>
-        <button id="btn-save-key" class="btn primary" style="flex:0 0 auto">Guardar</button>
-        <button id="btn-clear-key" class="btn danger" style="flex:0 0 auto">Quitar</button>
-      </div>
-    </section>
-    <section>
-      <h3>PROVEEDORES PROPIOS</h3>
-      <p class="hint">APIs compatibles con OpenAI (OpenAI, Gemini, Groq, DeepSeek, Mistral, Together o un servidor local). Se guardan en tu disco duro.</p>
+      <h3>PROVEEDORES</h3>
+      <p class="hint">Todos los proveedores se añaden aquí (OpenRouter, Ollama, OpenCode, OpenAI, Gemini, Groq, DeepSeek, Mistral, Together, LM Studio o cualquier API compatible con OpenAI) y se guardan solo en tu disco duro.</p>
       <div class="table-wrap">
         <table class="user-table"><thead><tr><th>Nombre</th><th>URL</th><th>Clave</th><th></th></tr></thead>
-        <tbody>${providerRows || '<tr><td colspan="4">Sin proveedores propios.</td></tr>'}</tbody></table>
+        <tbody>${providerRows || '<tr><td colspan="4">Sin proveedores añadidos. Elige uno abajo para empezar.</td></tr>'}</tbody></table>
       </div>
       <div class="modal-row">
         <select id="preset" class="select">
           ${presets.map((item) => `<option value="${esc(item.id)}">${esc(item.name)}</option>`).join("")}
         </select>
         <input id="custom-name" type="text" placeholder="Nombre">
-        <input id="custom-base" type="text" placeholder="URL base (p. ej. https://api.openai.com/v1)">
-        <input id="custom-key" type="password" placeholder="Clave" autocomplete="off">
+        <input id="custom-base" type="text" placeholder="URL base (p. ej. https://openrouter.ai/api/v1)">
+        <input id="custom-key" type="password" placeholder="Clave (vacío si es local)" autocomplete="off">
       </div>
       <p id="preset-help" class="hint"></p>
       <div class="modal-row">
@@ -2620,11 +2675,7 @@ async function openSettings(tab = "main") {
           <input type="checkbox" id="new-code-include-providers" ${customProviders.length ? "checked" : ""}>
           <span><strong>Incluir mi lista de proveedores (${customProviders.length})</strong> para que vea los mismos proveedores y modelos al entrar (tus claves personales NO se copian)</span>
         </label>
-        <div class="code-pack-row">
-          <label>OpenRouter</label>
-          <input id="new-code-or-key" type="password" placeholder="Clave OpenRouter dedicada para esta persona (opcional)" autocomplete="off">
-        </div>
-        ${packProviderInputs}
+        ${packProviderInputs || '<p class="hint" style="margin:0">Añade primero tus proveedores arriba si quieres incluirlos en el paquete inicial.</p>'}
         <p class="hint" style="margin:0">Las claves dedicadas que escribas aquí se transferirán una sola vez al disco duro de esa persona cuando canjee su código y después se borrarán del servidor.</p>
       </div>
       <div class="modal-row" style="margin-top:10px">
@@ -2657,6 +2708,7 @@ async function openSettings(tab = "main") {
     $("custom-name").value = presetObj.id === "custom" ? "" : presetObj.name;
     $("custom-base").value = presetObj.base || "";
     $("preset-help").textContent = presetObj.help || "";
+    if ($("cat-media")) $("cat-media").checked = presetObj.id === "openrouter";
   };
   $("preset").addEventListener("change", syncPreset);
   syncPreset();
@@ -2690,46 +2742,6 @@ async function openSettings(tab = "main") {
     } catch (exc) { toast(exc.message, "error"); }
   });
 
-  root.querySelector("#btn-save-key").addEventListener("click", async () => {
-    const key = $("openrouter-key").value.trim();
-    if (!key) {
-      toast("Pega una clave para guardarla (o pulsa Quitar para borrarla).", "error");
-      return;
-    }
-    state.vault.openrouter_api_key = key;
-    await saveUserVault();
-    toast("Clave guardada en tu disco duro local.", "ok");
-    await openSettings("main");
-  });
-  root.querySelector("#btn-clear-key").addEventListener("click", async () => {
-    state.vault.openrouter_api_key = "";
-    await saveUserVault();
-    toast("Clave eliminada de tu disco duro local.", "ok");
-    await openSettings("main");
-  });
-  root.querySelector("#btn-check-key").addEventListener("click", async () => {
-    const typed = $("openrouter-key").value.trim();
-    const key = typed || String(state.vault.openrouter_api_key || "").trim();
-    if (!key) {
-      toast("No hay clave de OpenRouter para comprobar.", "error");
-      return;
-    }
-    try {
-      if (typed) {
-        state.vault.openrouter_api_key = typed;
-        await saveUserVault();
-      }
-      const result = await api("/api/check", { method: "POST", body: { openrouter_api_key: key } });
-      if (!result.ok) {
-        throw new Error(result.message || "Clave de OpenRouter no válida.");
-      }
-      const bits = ["Clave válida"];
-      if (result.free_remaining != null) bits.push(`${result.free_remaining} gratis hoy`);
-      if (result.credits != null) bits.push(`créditos $${result.credits}`);
-      else if (result.remaining != null) bits.push(`saldo $${result.remaining}`);
-      toast(bits.join(" · "), "ok");
-    } catch (exc) { toast(exc.message, "error"); }
-  });
   root.querySelector("#btn-clear-usage").addEventListener("click", async () => {
     const ok = await confirmModal(
       "Reiniciar consumo",
@@ -2791,7 +2803,6 @@ async function openSettings(tab = "main") {
     const expiresDaysRaw = $("new-code-days").value;
     const role = $("new-code-admin").checked ? "admin" : "user";
     const includeProviders = $("new-code-include-providers")?.checked;
-    const dedicatedOrKey = ($("new-code-or-key")?.value || "").trim();
 
     const perProviderKeys = new Map();
     root.querySelectorAll("[data-pack-provider-key]").forEach((input) => {
@@ -2816,13 +2827,9 @@ async function openSettings(tab = "main") {
       }
     }
 
-    const bootstrapPack =
-      dedicatedOrKey || packProviders.length
-        ? {
-            ...(dedicatedOrKey ? { openrouter_api_key: dedicatedOrKey } : {}),
-            ...(packProviders.length ? { custom_providers: packProviders } : {}),
-          }
-        : null;
+    const bootstrapPack = packProviders.length
+      ? { custom_providers: packProviders }
+      : null;
 
     try {
       const res = await api("/api/admin/codes", {
@@ -2911,6 +2918,26 @@ async function openSettings(tab = "main") {
         toast("Carpeta actualizada.", "ok");
         if (dataUser.dataset.userData === state.user.id) location.reload();
         else await openSettings("admin");
+      } catch (exc) { toast(exc.message, "error"); }
+      return;
+    }
+    const checkOr = event.target.closest("[data-check-openrouter]");
+    if (checkOr) {
+      const pid = checkOr.dataset.checkOpenrouter;
+      const provider = (state.vault.custom_providers || []).find((item) => item.id === pid);
+      const key = String(provider?.key || "").trim();
+      if (!key) {
+        toast("Edita este proveedor OpenRouter y añade su clave para comprobarla.", "error");
+        return;
+      }
+      try {
+        const result = await api("/api/check", { method: "POST", body: { openrouter_api_key: key } });
+        if (!result.ok) throw new Error(result.message || "Clave de OpenRouter no válida.");
+        const bits = ["Clave válida"];
+        if (result.free_remaining != null) bits.push(`${result.free_remaining} gratis hoy`);
+        if (result.credits != null) bits.push(`créditos $${result.credits}`);
+        else if (result.remaining != null) bits.push(`saldo $${result.remaining}`);
+        toast(bits.join(" · "), "ok");
       } catch (exc) { toast(exc.message, "error"); }
       return;
     }

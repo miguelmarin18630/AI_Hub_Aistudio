@@ -1243,16 +1243,22 @@ app.post("/api/chat", async (req: AuthedRequest, res) => {
   };
 
   try {
-    if (providerId === "opencode" || providerId === "claude") {
-      throw new api.ApiError(
-        `${providerId} es un agente CLI local y no está instalado en este servidor web. Usa OpenRouter o un proveedor propio en Ajustes.`
-      );
-    } else if (providerId === "ollama") {
+    const savedCustom = !stateless ? custom.getCustom(cfg, providerId) : null;
+    const resolvedBase = String(clientAuth?.base || savedCustom?.base || "").trim();
+    const isOllama =
+      providerId === "ollama" ||
+      providerId.toLowerCase().includes("ollama") ||
+      resolvedBase.includes(":11434");
+    const isOpenRouter =
+      providerId === "openrouter" || resolvedBase.toLowerCase().includes("openrouter.ai");
+
+    if (isOllama) {
+      const ollamaBase = resolvedBase || undefined;
       if (root && useTools) {
         const msgs = [...built.messages];
         let finished = false;
         for (let round = 0; round < TOOL_ROUNDS; round++) {
-          const response = await api.chatOllamaTools(uid, msgs, agent.TOOLS);
+          const response = await api.chatOllamaTools(uid, msgs, agent.TOOLS, ollamaBase);
           addUsageTotals(usageTotal, (response.usage || {}) as Record<string, unknown>);
           const choices = Array.isArray(response.choices) ? response.choices : [{}];
           const message = ((choices[0] as Record<string, unknown>)?.message || {}) as Record<
@@ -1305,25 +1311,26 @@ app.post("/api/chat", async (req: AuthedRequest, res) => {
           uid,
           built.messages,
           (text) => sendEvent({ type: "delta", text }),
-          abortController.signal
+          abortController.signal,
+          ollamaBase
         );
         addUsageTotals(usageTotal, stats);
       }
     } else {
       let key = "";
       let base = api.BASE;
-      if (providerId === "openrouter") {
-        key = clientAuth?.apiKey || config.openrouterKey(cfg, false);
-        base = api.BASE;
+      if (isOpenRouter) {
+        key = clientAuth?.apiKey || String(savedCustom?.key || "") || config.openrouterKey(cfg, false);
+        base = resolvedBase || api.BASE;
       } else if (clientAuth && clientAuth.base) {
         key = clientAuth.apiKey;
         base = clientAuth.base;
       } else {
-        const record = custom.getCustom(cfg, providerId);
-        key = String(record?.key || "");
-        base = String(record?.base || "");
+        key = String(savedCustom?.key || "");
+        base = String(savedCustom?.base || "");
       }
-      if (!key) {
+      const isLocalBase = /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(?::|\/|$)/i.test(base);
+      if (!key && !isLocalBase) {
         throw new api.ApiError("Falta la clave de este proveedor. Añádela en Ajustes.");
       }
       if (root && useTools) {
@@ -1447,18 +1454,21 @@ app.post("/api/image", async (req: AuthedRequest, res, next) => {
     }
     const outDir = config.imageDir(cfg);
     let generated: { filePath: string; cost: number | null; media: string };
-    if (provider === "openrouter") {
-      const key = clientAuth?.apiKey || config.openrouterKey(cfg, false);
-      if (!key) throw new api.ApiError("Falta la clave de OpenRouter. Configúrala en Ajustes.");
+    const savedCustom = !stateless ? custom.getCustom(cfg, provider) : null;
+    const imgBase = String(clientAuth?.base || savedCustom?.base || "").trim();
+    const isOpenRouterImg =
+      provider === "openrouter" || imgBase.toLowerCase().includes("openrouter.ai");
+    if (isOpenRouterImg) {
+      const key = clientAuth?.apiKey || String(savedCustom?.key || "") || config.openrouterKey(cfg, false);
+      if (!key) throw new api.ApiError("Falta la clave de OpenRouter. Configúrala en Ajustes → Proveedores.");
       generated = await api.generateImage(key, uid, prompt, outDir, aspect);
     } else if (clientAuth && clientAuth.base && clientAuth.apiKey) {
       generated = await api.generateImageOpenAI(clientAuth.base, clientAuth.apiKey, uid, prompt, outDir);
     } else {
-      const record = custom.getCustom(cfg, provider);
-      if (!record?.key || !record?.base) {
+      if (!savedCustom?.key || !savedCustom?.base) {
         throw new api.ApiError("Falta la clave o la URL de ese proveedor.");
       }
-      generated = await api.generateImageOpenAI(record.base, record.key, uid, prompt, outDir);
+      generated = await api.generateImageOpenAI(savedCustom.base, savedCustom.key, uid, prompt, outDir);
     }
     if (!stateless) {
       usage.recordUsage(provider, uid, { images: 1, cost: generated.cost || 0 });
@@ -1489,8 +1499,10 @@ app.post("/api/video", async (req: AuthedRequest, res, next) => {
       res.status(400).json({ error: "Escribe qué vídeo quieres generar." });
       return;
     }
-    const key = clientAuth?.apiKey || config.openrouterKey(cfg, false);
-    if (!key) throw new api.ApiError("Falta la clave de OpenRouter. Configúrala en Ajustes.");
+    const provider = String(req.body?.provider || "openrouter");
+    const savedCustom = !stateless ? custom.getCustom(cfg, provider) : null;
+    const key = clientAuth?.apiKey || String(savedCustom?.key || "") || config.openrouterKey(cfg, false);
+    if (!key) throw new api.ApiError("Falta la clave de OpenRouter. Configúrala en Ajustes → Proveedores.");
     const rawDuration = req.body?.duration;
     const duration =
       rawDuration != null && rawDuration !== "" && Number.isFinite(Number(rawDuration))
@@ -1502,7 +1514,7 @@ app.post("/api/video", async (req: AuthedRequest, res, next) => {
       aspectRatio: String(req.body?.aspect_ratio || "") || null,
     });
     if (!stateless) {
-      usage.recordUsage("openrouter", uid, { videos: 1 });
+      usage.recordUsage(provider, uid, { videos: 1 });
     }
     const rel = mediaRelative(cfg, user.id, filePath);
     res.json({

@@ -258,9 +258,16 @@ export function videoPrices(skus: unknown): [number | null, string] {
   return [candidates[0][1], "s"];
 }
 
-export async function ollamaTags(): Promise<Array<Record<string, unknown>>> {
+export function normalizeOllamaOrigin(baseUrl?: string | null): string {
+  const raw = String(baseUrl || "").trim().replace(/\/+$/, "");
+  if (!raw) return OLLAMA.replace(/\/+$/, "");
+  return raw.replace(/\/(v1|api)$/i, "");
+}
+
+export async function ollamaTags(baseUrl?: string | null): Promise<Array<Record<string, unknown>>> {
+  const origin = normalizeOllamaOrigin(baseUrl);
   try {
-    const data = await requestJson<{ models?: unknown }>(`${OLLAMA}/api/tags`, null, null, 2_000);
+    const data = await requestJson<{ models?: unknown }>(`${origin}/api/tags`, null, null, 2_000);
     return Array.isArray(data.models) ? (data.models as Array<Record<string, unknown>>) : [];
   } catch {
     return [];
@@ -271,11 +278,13 @@ export async function streamOllamaChat(
   model: string,
   messages: ChatMessage[],
   onDelta: (text: string) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  baseUrl?: string | null
 ): Promise<Record<string, number>> {
+  const origin = normalizeOllamaOrigin(baseUrl);
   let res: Response;
   try {
-    res = await fetch(`${OLLAMA}/api/chat`, {
+    res = await fetch(`${origin}/api/chat`, {
       method: "POST",
       headers: buildHeaders(),
       body: JSON.stringify({ model, messages, stream: true }),
@@ -328,8 +337,10 @@ export async function streamOllamaChat(
 export async function chatOllamaTools(
   model: string,
   messages: ChatMessage[],
-  tools: unknown[]
+  tools: unknown[],
+  baseUrl?: string | null
 ): Promise<Record<string, unknown>> {
+  const origin = normalizeOllamaOrigin(baseUrl);
   const outgoing = messages.map((msg) => {
     const copy: Record<string, unknown> = { ...msg, content: msg.content || "" };
     if (Array.isArray(msg.tool_calls)) {
@@ -348,7 +359,7 @@ export async function chatOllamaTools(
     return copy;
   });
   const data = await requestJson<Record<string, unknown>>(
-    `${OLLAMA}/api/chat`,
+    `${origin}/api/chat`,
     { model, messages: outgoing, tools, stream: false },
     null,
     300_000
