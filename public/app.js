@@ -1540,25 +1540,116 @@ function sortPaidModels(items) {
   });
 }
 
-function buildModelRow(model) {
-  const row = document.createElement("div");
-  const disabled = isModelContextDisabled(model);
-  const selected = state.selected && state.selected.uid === model.uid && state.selected.provider === model.provider;
-  row.className = "model-row" + (selected ? " selected" : "") + (disabled ? " disabled" : "");
-  if (disabled) row.title = "Contexto insuficiente para la conversación actual";
-  row.dataset.uid = model.uid;
-  row.dataset.provider = model.provider;
-  const priceClass = model.free ? "free" : (model.effective_price == null ? "unknown" : "");
-  row.innerHTML = `
-    <span class="model-glyph" style="color:${esc(model.provider_color)}">${esc(model.provider_glyph)}</span>
-    <div class="model-main">
-      <div class="model-name">${esc(model.name)}</div>
-      <div class="model-sub">${esc(model.info_text)}</div>
-    </div>
-    <div class="model-price ${priceClass}">${esc(model.price_text)}</div>`;
-  return row;
-}
+function modelUsageStats(model) {
+    let used = 0, limit = model.context || 32768;
+    if (state.vault && state.vault.usage) {
+      const key = `${model.provider}:${model.uid}`;
+      const u = state.vault.usage[key];
+      if (u && u.prompt != null) used = u.prompt;
+    }
+    const remaining = Math.max(0, limit - used);
+    const pct = limit > 0 ? Math.round(used / limit * 100) : 0;
+    return { used, remaining, pct, limit };
+  }
+  
+  function fmtTokens(n) {
+    if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
+    if (n >= 1000) return `${Math.round(n / 1000)}K`;
+    return String(n);
+  }
+  
+  function buildModelRow(model) {
+    const row = document.createElement("div");
+    const disabled = isModelContextDisabled(model);
+    const selected = state.selected && state.selected.uid === model.uid && state.selected.provider === model.provider;
+    row.className = "model-row" + (selected ? " selected" : "") + (disabled ? " disabled" : "");
+    if (disabled) row.title = "Contexto insuficiente para la conversación actual";
+    row.dataset.uid = model.uid;
+    row.dataset.provider = model.provider;
+    const priceClass = model.free ? "free" : (model.effective_price == null ? "unknown" : "");
+    const { used, remaining, pct, limit } = modelUsageStats(model);
+    row.innerHTML = `
+      <span class="model-glyph" style="color:${esc(model.provider_color)}">${esc(model.provider_glyph)}</span>
+      <div class="model-main">
+        <div class="model-name">${esc(model.name)}</div>
+        <div class="model-sub">${esc(model.info_text)}</div>
+        <div class="model-usage">
+          <span class="usage-used">${fmtTokens(used)}</span> de <span class="usage-limit">${fmtTokens(limit)}</span>
+          <div class="usage-bar">
+            <div class="usage-progress" style="width: ${pct}%"></div>
+          </div>
+        </div>
+      </div>
+      <div class="model-price ${priceClass}">${esc(model.price_text)}</div>`;
+    return row;
+  }
 
+function modelUsageStats(model) {
+    let used = 0, limit = model.context || 32768;
+    if (state.vault && state.vault.usage) {
+      const key = `${model.provider}:${model.uid}`;
+      const u = state.vault.usage[key];
+      if (u && u.prompt != null) used = u.prompt;
+    }
+    const remaining = Math.max(0, limit - used);
+    const pct = limit > 0 ? Math.round(used / limit * 100) : 0;
+    return { used, remaining, pct, limit };
+  }
+  
+  function maybeAutoSwitchModel(provider, currentUid) {
+    // Si no hay vault o no hay modelo seleccionado, no hacer nada
+    if (!state.vault || !state.selected) return;
+    
+    // Si el modelo actual es gratuito, verificar si se alcanzó el límite
+    const isFree = state.selected.free;
+    if (!isFree) return;
+    
+    // Obtener estadísticas de consumo del modelo actual
+    const stats = modelUsageStats(state.selected);
+    const { used, limit } = stats;
+    
+    // Si no ha habido uso, no cambiar
+    if (used === 0) return;
+    
+    // Buscar el siguiente modelo gratuito del mismo proveedor
+    const models = (state.vault.models_by_provider || {})[provider] || [];
+    const freeModels = models.filter((m) => m.free && m.uid !== currentUid);
+    
+    if (freeModels.length === 0) {
+      // No hay más modelos gratuitos, mostrar aviso
+      toast("No hay más modelos gratuitos disponibles en este proveedor.", "info");
+      return;
+    }
+    
+    // Elegir el siguiente modelo (primer modelo gratuito disponible)
+    const nextModel = freeModels[0];
+    
+    // Seleccionar el nuevo modelo en la interfaz
+    state.selected = {
+      ...state.selected,
+      uid: nextModel.uid,
+      provider: nextModel.provider,
+      name: nextModel.name,
+      context: nextModel.context,
+      free: nextModel.free,
+      price_text: nextModel.price_text,
+      info_text: nextModel.info_text,
+      provider_color: nextModel.provider_color,
+      provider_glyph: nextModel.provider_glyph,
+    };
+    
+    // Renderizar modelos actualizados
+    renderModels();
+    
+    // Enfocar el nuevo modelo seleccionado
+    const newRow = $("model-list")?.querySelector(`.model-row[data-provider="${nextModel.provider}"][data-uid="${nextModel.uid}"]`);
+    if (newRow) {
+      newRow.click();
+    }
+    
+    toast(`Cambiado automáticamente a ${nextModel.name} (gratis)`, "ok");
+  }
+  
 function renderModels() {
   const root = $("model-list");
   root.innerHTML = "";
@@ -2211,6 +2302,8 @@ async function sendChat() {
             const uText = describeLocalUsage(localStats);
             $("chat-status").textContent = `Listo en ${event.elapsed}s · ${uText}`;
             updateConvContext(event.context);
+            // Auto-switch to next free model if current model reached consumption limit
+            maybeAutoSwitchModel(model.provider, model.uid);
             loadUsage();
             loadFiles();
           } else if (event.type === "error") {

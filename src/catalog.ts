@@ -522,8 +522,13 @@ export function buildOpenRouterText(raw: Array<Record<string, unknown>>): ModelD
       ? (arch.input_modalities as string[])
       : ["text"];
     const tags: string[] = [];
-    if (free) tags.push("gratis");
-    if (item.reasoning) tags.push("razonamiento");
+    const tagsLower = new Set();
+    if (free) {
+      if (!tagsLower.has("gratis")) { tags.push("gratis"); tagsLower.add("gratis"); }
+    }
+    if (item.reasoning) {
+      if (!tagsLower.has("razonamiento")) { tags.push("razonamiento"); tagsLower.add("razonamiento"); }
+    }
     if (supported.includes("tools")) tags.push("herramientas");
     if (inputs.includes("image")) tags.push("visión");
     if (uid.endsWith(":free")) tags.push("free");

@@ -396,6 +396,44 @@ label > input, label > select { margin-top: 4px; }
 .model-price { font-size: 11px; text-align: right; color: var(--text); white-space: nowrap; }
 .model-price.free { color: var(--green); font-weight: 700; }
 .model-price.unknown { color: var(--dim); }
+
+/* ---------- Barra de consumo de modelo ---------- */
+.model-usage {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.model-usage .usage-used,
+.model-usage .usage-limit {
+  min-width: 40px;
+  text-align: right;
+}
+.model-usage .usage-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--panel-3);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-left: 6px;
+}
+.model-usage .usage-progress {
+  height: 100%;
+  background: var(--accent);
+  width: 0%;
+  transition: width 0.3s ease;
+}
+/* Estados de barra */
+.model-usage .usage-progress.used { background: var(--green); }
+.model-usage .usage-progress.low { background: var(--red); }
+.model-usage .usage-progress.medium { background: var(--accent); }
+/* Clases de ancho predefinidas para lectura rápida */
+.usage-bar .bar-30 { width: 30% !important; }
+.usage-bar .bar-50 { width: 50% !important; }
+.usage-bar .bar-70 { width: 70% !important; }
+.usage-bar .bar-100 { width: 100% !important; }
 .model-list-empty { padding: 22px; text-align: center; color: var(--muted); font-size: 12px; }
 
 .legend { display: flex; justify-content: space-between; color: var(--dim); font-size: 10px; }
