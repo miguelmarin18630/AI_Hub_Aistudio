@@ -746,6 +746,7 @@ kbd {
     display: flex;
     border-right: 1px solid var(--border);
     box-shadow: var(--shadow);
+    overflow-y: auto;
     transform: translateX(-105%);
     transition: transform 0.2s ease;
   }
