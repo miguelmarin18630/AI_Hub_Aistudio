@@ -61,7 +61,8 @@ AI Hub funciona como **Progressive Web App (PWA)** instalable en ordenadores y m
 
 El servidor escucha por defecto en el puerto `3000` (configurable con `PORT`).
 
-- **Windows (arranque rápido conjunto):** desde `C:\Proyectos\AI_Hub_Aistudio`, haz doble clic en **`Iniciar_Todo.bat`** (o **`Iniciar_Todo.vbs`** en segundo plano) para arrancar a la vez `Iniciar_Web.bat` (puerto `3000`) y `Iniciar_Tunel.bat` (túnel `aistudio`). También puedes lanzar solo el túnel con **`Iniciar_Tunel.bat`** / **`Iniciar_Tunel.vbs`**.
+- **Windows (arranque rápido conjunto):** desde `C:\Proyectos\AI_Hub_Aistudio`, haz doble clic en **`Iniciar_Todo.bat`** (o **`Iniciar_Todo.vbs`** en segundo plano) para arrancar a la vez `Iniciar_Web.bat` (puerto `3000`) y `Iniciar_Tunel.bat` (túnel `aistudio`).
+- **Inicio automático con Windows:** haz doble clic una sola vez en **`Instalar_Inicio_Windows.bat`** para eliminar cualquier inicio anterior de AI Hub/túnel y dejar configurado `Iniciar_Todo.vbs` (`http://127.0.0.1:3000` + túnel) al encender el PC.
 
 Si lo configuras desde cero:
 

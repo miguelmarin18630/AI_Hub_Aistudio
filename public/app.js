@@ -303,6 +303,7 @@ async function applyImportedVaultObject(parsed) {
   if (!parsed || typeof parsed !== "object") {
     throw new Error("El archivo JSON no tiene un formato válido de AI Hub.");
   }
+  const prevCache = (state.vault && state.vault.models_by_provider) || {};
   // Support both full vault export and legacy config.json / conversations.json
   const imported = normalizeVault(parsed);
   if (Array.isArray(parsed.items) && !parsed.history) {
@@ -310,6 +311,10 @@ async function applyImportedVaultObject(parsed) {
       items: parsed.items,
       current: parsed.current || null,
     };
+  }
+  const hasImportedCache = Object.keys(imported.models_by_provider || {}).length > 0;
+  if (!hasImportedCache && Object.keys(prevCache).length > 0) {
+    imported.models_by_provider = { ...prevCache };
   }
   imported.migrated_from_server = true;
   state.vault = imported;
@@ -324,6 +329,12 @@ async function applyImportedVaultObject(parsed) {
     state.messages = [];
     state.conversationId = null;
     renderMessages();
+  }
+  const needsRefresh =
+    !hasImportedCache &&
+    ((imported.custom_providers && imported.custom_providers.length > 0) || Boolean(imported.openrouter_api_key));
+  if (needsRefresh) {
+    await refreshCatalog(true);
   }
 }
 
@@ -1399,8 +1410,8 @@ function renderProviders() {
   all.addEventListener("click", () => selectProvider(null));
   menu.appendChild(all);
   for (const provider of state.providers) {
-    const count = counts[provider.id];
-    if (!count) continue;
+    const count = counts[provider.id] || { total: 0, free: 0 };
+    if (!count.total && state.group !== "all") continue;
     const item = document.createElement("button");
     item.type = "button";
     item.className = "provider-item" + (state.providerFilter === provider.id ? " active" : "");

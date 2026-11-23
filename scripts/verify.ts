@@ -171,6 +171,7 @@ function checkStartupScripts(): void {
   for (const file of [
     "Iniciar_Todo.bat",
     "Iniciar_Todo.vbs",
+    "Instalar_Inicio_Windows.bat",
     "Iniciar_Web.bat",
     "Iniciar_Web.vbs",
     "Iniciar_Tunel.bat",
