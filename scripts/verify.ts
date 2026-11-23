@@ -169,6 +169,8 @@ function checkFreeModelRules(): void {
 function checkStartupScripts(): void {
   const root = process.cwd();
   for (const file of [
+    "Iniciar_Todo.bat",
+    "Iniciar_Todo.vbs",
     "Iniciar_Web.bat",
     "Iniciar_Web.vbs",
     "Iniciar_Tunel.bat",

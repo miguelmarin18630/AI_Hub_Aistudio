@@ -13,7 +13,7 @@ La **versión** se muestra dinámicamente en la cabecera y en la pantalla de acc
 Requisitos: **Node.js 22 o superior** y conexión a internet.
 
 - **Repositorio:** `https://github.com/miguelmarin18630/AI_Hub_Aistudio` (carpeta local en Windows: `C:\Proyectos\AI_Hub_Aistudio`).
-- **Windows (doble clic):** usa **`Iniciar_Web.bat`** (o **`Iniciar_Web.vbs`** en segundo plano) para arrancar el servidor en el puerto `3000`, y **`Iniciar_Tunel.bat`** (o **`Iniciar_Tunel.vbs`**) para abrir el túnel de Cloudflare `ai_hub` hacia `http://ai_hub.marinweb.org` / `https://ai_hub.marinweb.org`.
+- **Windows (doble clic):** usa **`Iniciar_Todo.bat`** (o **`Iniciar_Todo.vbs`** en segundo plano) para arrancar a la vez el servidor en el puerto `3000` y el túnel de Cloudflare `aistudio` hacia `https://aistudio.marinweb.org` (o por separado con **`Iniciar_Web.bat`** e **`Iniciar_Tunel.bat`**).
 - **macOS / Linux:** ejecuta **`./Iniciar_Web.command`** o usa los comandos de terminal:
 
 ```bash
@@ -112,7 +112,7 @@ Variables opcionales (ver `.env.example`):
 - `PORT`: puerto HTTP (por defecto `3000`).
 - `AIHUB_DATA_DIR`: carpeta persistente del servidor para códigos de acceso y sesiones (en los lanzadores: `%APPDATA%\AIHub_Aistudio`).
 - `AIHUB_ADMIN_CODE`: código maestro de administrador opcional (mínimo 6 dígitos o caracteres).
-- `AIHUB_TUNNEL`: nombre del túnel de Cloudflare usado por `Iniciar_Tunel.bat` (por defecto `ai_hub` para `ai_hub.marinweb.org`).
+- `AIHUB_TUNNEL`: nombre del túnel de Cloudflare usado por `Iniciar_Tunel.bat` (por defecto `aistudio` para `aistudio.marinweb.org`).
 - `OLLAMA_URL`: URL del servidor Ollama local (por defecto `http://127.0.0.1:11434`).
 
 ---

@@ -12,8 +12,8 @@ if errorlevel 1 (
 )
 
 if "%PORT%"=="" set PORT=3000
-if "%AIHUB_TUNNEL%"=="" set AIHUB_TUNNEL=ai_hub
+if "%AIHUB_TUNNEL%"=="" set AIHUB_TUNNEL=aistudio
 
-echo [AI Hub] Abriendo tunel Cloudflare "%AIHUB_TUNNEL%" (ai_hub.marinweb.org) hacia http://127.0.0.1:%PORT% ...
+echo [AI Hub] Abriendo tunel Cloudflare "%AIHUB_TUNNEL%" (aistudio.marinweb.org) hacia http://127.0.0.1:%PORT% ...
 cloudflared tunnel run --url http://127.0.0.1:%PORT% %AIHUB_TUNNEL%
 if errorlevel 1 pause

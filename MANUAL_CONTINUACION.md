@@ -131,7 +131,7 @@ El repositorio remoto de referencia es:
 
 - **Remoto:** <https://github.com/miguelmarin18630/AI_Hub_Aistudio>
 - **Carpeta local (Windows):** `C:\Proyectos\AI_Hub_Aistudio`
-- **Puerto y URL pública:** puerto `3000` · `http://ai_hub.marinweb.org` (túnel `ai_hub`)
+- **Puerto y URL pública:** puerto `3000` · `https://aistudio.marinweb.org` (túnel `aistudio`)
 - **Rama:** `main` (sigue a `origin/main`)
 
 En cada cambio:

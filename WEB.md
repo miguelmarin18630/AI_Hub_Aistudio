@@ -10,7 +10,7 @@ Requisitos: **Node.js 22 o superior**.
 
 - **Repositorio GitHub:** <https://github.com/miguelmarin18630/AI_Hub_Aistudio>
 - **Carpeta local (Windows):** `C:\Proyectos\AI_Hub_Aistudio`
-- **Windows (arranque rápido):** haz doble clic en **`Iniciar_Web.bat`** (con ventana de consola) o **`Iniciar_Web.vbs`** (en segundo plano). Arranca en el puerto `3000` (listo para el túnel `ai_hub` hacia `ai_hub.marinweb.org`) usando `%APPDATA%\AIHub_Aistudio` para los códigos de acceso del servidor e instala las dependencias automáticamente si es la primera vez.
+- **Windows (arranque rápido):** haz doble clic en **`Iniciar_Web.bat`** (con ventana de consola) o **`Iniciar_Web.vbs`** (en segundo plano). Arranca en el puerto `3000` (listo para el túnel `aistudio` hacia `aistudio.marinweb.org`) usando `%APPDATA%\AIHub_Aistudio` para los códigos de acceso del servidor e instala las dependencias automáticamente si es la primera vez.
 - **macOS / Linux:** ejecuta `./Iniciar_Web.command` (o `npm install && npm start`, puerto `3000` por defecto).
 
 En desarrollo (con recarga automática):
@@ -57,19 +57,19 @@ AI Hub funciona como **Progressive Web App (PWA)** instalable en ordenadores y m
 - En móvil la barra superior se reduce a **☰ Modelos** y al menú **⋯**, y los paneles se abren como cajones laterales.
 - Si se pierde la conexión, aparece un aviso discreto en la esquina inferior izquierda y el Service Worker mantiene disponible la interfaz en caché.
 
-## 3. Publicar en ai_hub.marinweb.org (Cloudflare Tunnel)
+## 3. Publicar en aistudio.marinweb.org (Cloudflare Tunnel)
 
 El servidor escucha por defecto en el puerto `3000` (configurable con `PORT`).
 
-- **Windows (arranque rápido del túnel):** desde `C:\Proyectos\AI_Hub_Aistudio`, haz doble clic en **`Iniciar_Tunel.bat`** (o **`Iniciar_Tunel.vbs`** en segundo plano). Lanza automáticamente `cloudflared tunnel run --url http://127.0.0.1:3000 ai_hub`.
+- **Windows (arranque rápido conjunto):** desde `C:\Proyectos\AI_Hub_Aistudio`, haz doble clic en **`Iniciar_Todo.bat`** (o **`Iniciar_Todo.vbs`** en segundo plano) para arrancar a la vez `Iniciar_Web.bat` (puerto `3000`) y `Iniciar_Tunel.bat` (túnel `aistudio`). También puedes lanzar solo el túnel con **`Iniciar_Tunel.bat`** / **`Iniciar_Tunel.vbs`**.
 
 Si lo configuras desde cero:
 
 1. Instala `cloudflared` (<https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/>).
 2. Inicia sesión: `cloudflared tunnel login`
-3. Crea el túnel: `cloudflared tunnel create ai_hub`
-4. Asocia el dominio: `cloudflared tunnel route dns ai_hub ai_hub.marinweb.org` *(si Cloudflare rechaza el guion bajo `_` para SSL/HTTPS, usa `ai-hub.marinweb.org`)*
-5. Arranca el servidor (`Iniciar_Web.bat` / `Iniciar_Web.vbs`) y el túnel (`Iniciar_Tunel.bat` / `Iniciar_Tunel.vbs`).
+3. Crea el túnel: `cloudflared tunnel create aistudio`
+4. Asocia el dominio: `cloudflared tunnel route dns aistudio aistudio.marinweb.org`
+5. Arranca todo (`Iniciar_Todo.bat` / `Iniciar_Todo.vbs`).
 
 Cuando el tráfico entra por HTTPS (a través de Cloudflare), las cookies de sesión se emiten automáticamente con `HttpOnly` y `Secure`.
 

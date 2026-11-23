@@ -65,7 +65,7 @@ Paso 2: Arranca la aplicacion:
 Paso 3: Abre tu navegador (Chrome, Edge, Safari o Firefox) y entra en:
             http://127.0.0.1:3000
         O entra directamente en la direccion web privada si te han dado un
-        enlace (por ejemplo http://ai_hub.marinweb.org o https://ai_hub.marinweb.org).
+        enlace (por ejemplo https://aistudio.marinweb.org).
 
 Paso 4: ACCESO SIN USUARIO NI CONTRASENA (CODIGO DE ACCESO):
         - Si alguien te ha invitado a su AI Hub: solo introduce el codigo
