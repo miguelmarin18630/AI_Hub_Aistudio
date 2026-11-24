@@ -2855,14 +2855,17 @@ function openCodeRevealModal(code, record) {
 async function openSettings(tab = "main") {
   let users = [];
   let codes = [];
+  let githubSyncStatus = null;
   try {
     if (state.user.role === "admin") {
-      const [usersRes, codesRes] = await Promise.all([
+      const [usersRes, codesRes, syncRes] = await Promise.all([
         api("/api/admin/users"),
         api("/api/admin/codes"),
+        api("/api/admin/github-sync").catch(() => null),
       ]);
       users = usersRes.users || [];
       codes = codesRes.codes || [];
+      githubSyncStatus = syncRes;
     }
   } catch (exc) {
     toast(exc.message, "error");
@@ -3034,6 +3037,39 @@ async function openSettings(tab = "main") {
       </div>
       <div class="modal-row" style="margin-top:10px">
         <button id="btn-create-code" class="btn primary">🔑 Generar código de acceso</button>
+      </div>
+
+      <div class="vault-box" style="margin-top:18px">
+        <div class="vault-head">
+          <div>
+            <strong>🔄 Sincronización automática GitHub → carpeta del servidor</strong>
+            <div class="vault-meta">
+              Destino: <code>${esc(githubSyncStatus?.target_dir || "C:\\Proyectos\\AI_Hub_Aistudio")}</code>
+              · Utilidad: <code>${esc(githubSyncStatus?.utility || "robocopy")}</code>
+              · Rama: <code>${esc(githubSyncStatus?.branch || "main")}</code>
+            </div>
+          </div>
+          <span class="vault-badge ${githubSyncStatus?.last_run && !githubSyncStatus.last_run.ok ? "warn" : ""}">
+            ${githubSyncStatus?.running
+              ? "● Sincronizando…"
+              : githubSyncStatus?.last_run
+                ? githubSyncStatus.last_run.ok
+                  ? `● ${esc(githubSyncStatus.last_run.commit || "OK")} · ${esc(githubSyncStatus.last_run.summary)}`
+                  : `● ${esc(githubSyncStatus.last_run.summary)}`
+                : githubSyncStatus?.auto_sync_enabled
+                  ? `● Automática cada ${esc(String(githubSyncStatus.interval_seconds || 60))}s`
+                  : "● Lista"}
+          </span>
+        </div>
+        ${githubSyncStatus?.last_run?.error ? `<p class="hint" style="margin:0;color:var(--warn)">${esc(githubSyncStatus.last_run.error)}</p>` : ""}
+        <div class="vault-actions" style="align-items:center">
+          <button id="btn-github-sync-now" class="btn primary small" ${githubSyncStatus?.running ? "disabled" : ""}>🔄 Sincronizar GitHub → carpeta ahora</button>
+          <label class="check" style="margin:0">
+            <input type="checkbox" id="chk-github-auto-sync" ${githubSyncStatus?.auto_sync_enabled ? "checked" : ""} ${githubSyncStatus && !githubSyncStatus.supported_on_host ? "disabled" : ""}>
+            <span>Comprobar cada ${esc(String(githubSyncStatus?.interval_seconds || 60))} s automáticamente</span>
+          </label>
+        </div>
+        <p class="hint" style="margin:0">Descarga los últimos cambios de GitHub y copia los archivos automáticamente con <code>robocopy</code> (en Windows) o <code>rsync</code> (en Linux/macOS) excluyendo <code>.env</code>, <code>.git</code>, <code>node_modules</code> y datos locales.</p>
       </div>
 
       <details style="margin-top:18px">
@@ -3235,6 +3271,34 @@ async function openSettings(tab = "main") {
       toast("Usuario creado.", "ok");
       await openSettings("admin");
     } catch (exc) { toast(exc.message, "error"); }
+  });
+  root.querySelector("#btn-github-sync-now")?.addEventListener("click", async () => {
+    const btn = $("btn-github-sync-now");
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Sincronizando…";
+    }
+    try {
+      const res = await api("/api/admin/github-sync", { method: "POST" });
+      toast(res.run?.summary || "Sincronización completada.", "ok");
+    } catch (exc) {
+      toast(exc.message, "error");
+    }
+    await openSettings("admin");
+  });
+  root.querySelector("#chk-github-auto-sync")?.addEventListener("change", async (e) => {
+    try {
+      const enabled = Boolean(e.target.checked);
+      await api("/api/admin/github-sync/config", {
+        method: "POST",
+        body: { enabled },
+      });
+      toast(enabled ? "Sincronización automática activada." : "Sincronización automática pausada.", "ok");
+      await openSettings("admin");
+    } catch (exc) {
+      toast(exc.message, "error");
+      await openSettings("admin");
+    }
   });
   root.onclick = async (event) => {
     const revokeCode = event.target.closest("[data-revoke-code]");

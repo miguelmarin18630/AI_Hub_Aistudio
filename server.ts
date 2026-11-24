@@ -12,6 +12,7 @@ import * as chat from "./src/chat.ts";
 import * as config from "./src/config.ts";
 import * as custom from "./src/custom.ts";
 import * as projects from "./src/projects.ts";
+import * as githubSync from "./src/sync.ts";
 import { APP_VERSION } from "./src/types.ts";
 import type {
   ChatMessage,
@@ -356,12 +357,22 @@ function addUsageTotals(totals: Record<string, number>, data: Record<string, unk
 
 interface AuthedRequest extends Request {
   currentUser?: UserRecord;
+  rawBody?: Buffer;
 }
 
 const app = express();
 app.set("trust proxy", true);
 app.use(cookieParser());
-app.use(express.json({ limit: "16mb" }));
+app.use(
+  express.json({
+    limit: "16mb",
+    verify: (req, _res, buf) => {
+      if (req.url === "/api/webhook/github") {
+        (req as AuthedRequest).rawBody = Buffer.from(buf);
+      }
+    },
+  })
+);
 
 // Security headers (iframe-compatible for AI Studio preview)
 app.use((_req, res, next) => {
@@ -371,9 +382,9 @@ app.use((_req, res, next) => {
   next();
 });
 
-// Origin check on POST requests
+// Origin check on POST requests (GitHub webhook uses mandatory HMAC-SHA256 instead of browser Origin)
 app.use((req, res, next) => {
-  if (req.method === "POST" && !originOk(req)) {
+  if (req.method === "POST" && req.path !== "/api/webhook/github" && !originOk(req)) {
     res.status(403).json({ error: "Origen no permitido." });
     return;
   }
@@ -1186,6 +1197,83 @@ app.post("/api/admin/users/data", (req: AuthedRequest, res) => {
   res.json({ ok: true, data_dir: target });
 });
 
+// Admin GitHub -> local folder sync (robocopy on Windows / rsync on Linux & macOS)
+app.get("/api/admin/github-sync", async (req: AuthedRequest, res, next) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    res.setHeader("Cache-Control", "no-store");
+    res.json(await githubSync.getSyncStatus());
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post("/api/admin/github-sync", async (req: AuthedRequest, res, next) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const run = await githubSync.runGithubSync("manual", true);
+    const status = await githubSync.getSyncStatus();
+    res.status(run.ok ? 200 : 500).json({
+      ok: run.ok,
+      run,
+      status,
+      error: run.ok ? undefined : run.error || run.summary,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post("/api/admin/github-sync/config", async (req: AuthedRequest, res, next) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const enabled = typeof req.body?.enabled === "boolean" ? req.body.enabled : undefined;
+    const rawInterval = req.body?.interval_seconds;
+    const interval =
+      rawInterval !== undefined && rawInterval !== null && Number.isFinite(Number(rawInterval))
+        ? Number(rawInterval)
+        : undefined;
+    githubSync.setAutoSyncConfig({ enabled, interval_seconds: interval });
+    res.json({ ok: true, status: await githubSync.getSyncStatus() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Optional GitHub Push Webhook (HMAC-SHA256 verified)
+app.post("/api/webhook/github", (req: AuthedRequest, res) => {
+  const secret = String(process.env.AIHUB_GITHUB_WEBHOOK_SECRET || "").trim();
+  if (!secret) {
+    res.status(503).json({ error: "Webhook de GitHub no configurado en el servidor." });
+    return;
+  }
+  const signature = String(req.headers["x-hub-signature-256"] || "");
+  const rawBody = req.rawBody || Buffer.from(JSON.stringify(req.body || {}), "utf-8");
+  if (!githubSync.verifyGithubSignature(rawBody, signature, secret)) {
+    res.status(401).json({ error: "Firma de webhook no válida." });
+    return;
+  }
+  const event = String(req.headers["x-github-event"] || "").toLowerCase();
+  if (event === "ping") {
+    res.json({ ok: true, event: "ping" });
+    return;
+  }
+  if (event && event !== "push") {
+    res.json({ ok: true, ignored: true, event });
+    return;
+  }
+  const expectedRef = `refs/heads/${githubSync.getBranch()}`;
+  const incomingRef = String(req.body?.ref || "");
+  if (incomingRef && incomingRef !== expectedRef) {
+    res.json({ ok: true, ignored: true, reason: "other-branch" });
+    return;
+  }
+  void githubSync.runGithubSync("webhook", true).catch((err) => {
+    console.error("[github-sync webhook]", err);
+  });
+  res.status(202).json({ ok: true, queued: true });
+});
+
 // Chat (SSE streaming)
 app.post("/api/chat", async (req: AuthedRequest, res) => {
   const user = requireUser(req, res);
@@ -1642,4 +1730,5 @@ app.listen(PORT, HOST, () => {
   if (!access.hasAnyAdmin()) {
     console.log("Primera vez: abre la URL y crea tu código maestro de administrador.");
   }
+  githubSync.startAutoSyncScheduler();
 });

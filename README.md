@@ -115,6 +115,9 @@ Variables opcionales (ver `.env.example`):
 - `AIHUB_ADMIN_CODE`: código maestro de administrador opcional (mínimo 6 dígitos o caracteres).
 - `AIHUB_TUNNEL`: nombre del túnel de Cloudflare usado por `Iniciar_Tunel.bat` (por defecto `aistudio` para `aistudio.marinweb.org`).
 - `OLLAMA_URL`: URL del servidor Ollama local (por defecto `http://127.0.0.1:11434`).
+- `AIHUB_SYNC_TARGET_DIR`: carpeta local donde el servidor sincroniza automáticamente los cambios de GitHub usando `robocopy` en Windows (por defecto `C:\Proyectos\AI_Hub_Aistudio`) o `rsync` en Linux/macOS.
+- `AIHUB_AUTO_SYNC` / `AIHUB_AUTO_SYNC_SECONDS`: activa la comprobación automática periódica desde el servidor (en Windows activa cada `60` s por defecto; también controlable desde **🔑 Accesos**).
+- `AIHUB_GITHUB_WEBHOOK_SECRET`: secreto opcional HMAC-SHA256 para disparar la sincronización al instante mediante un webhook push de GitHub en `POST /api/webhook/github`.
 
 ---
 

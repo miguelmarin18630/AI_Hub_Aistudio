@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import * as access from "../src/access.ts";
 import * as catalog from "../src/catalog.ts";
 import * as chat from "../src/chat.ts";
 import * as custom from "../src/custom.ts";
+import * as githubSync from "../src/sync.ts";
 import { APP_VERSION } from "../src/types.ts";
 import type { ChatMessage, ModelData } from "../src/types.ts";
 
@@ -309,6 +311,40 @@ async function checkLiveServer(): Promise<void> {
   }
 }
 
+function checkGithubSyncModule(): void {
+  // Robocopy exit codes 0..7 indicate success; >= 8 indicate error
+  for (let c = 0; c <= 7; c++) {
+    assert.equal(githubSync.isRobocopySuccess(c), true, `Robocopy código ${c} debe ser éxito`);
+  }
+  assert.equal(githubSync.isRobocopySuccess(8), false, "Robocopy código 8 debe ser error");
+  assert.equal(githubSync.isRobocopySuccess(16), false, "Robocopy código 16 debe ser error");
+  assert.equal(githubSync.isRobocopySuccess(-1), false);
+
+  // Robocopy args must target the Windows path and exclude sensitive files/dirs
+  const roboArgs = githubSync.buildRobocopyArgs("C:\\staging", githubSync.DEFAULT_WINDOWS_TARGET);
+  assert.equal(roboArgs[1], "C:\\Proyectos\\AI_Hub_Aistudio");
+  assert.ok(roboArgs.includes("/MIR"), "Debe usar /MIR en robocopy");
+  assert.ok(roboArgs.includes("/XD") && roboArgs.includes(".git") && roboArgs.includes("node_modules"));
+  assert.ok(roboArgs.includes("/XF") && roboArgs.includes(".env") && roboArgs.includes("vault.json"));
+
+  // Rsync args must preserve trailing slashes and exclusions
+  const rsyncArgs = githubSync.buildRsyncArgs("/tmp/src", "/tmp/dst");
+  assert.ok(rsyncArgs.includes("-a") && rsyncArgs.includes("--delete"));
+  assert.ok(rsyncArgs.includes(".env") && rsyncArgs.includes(".git/"));
+  assert.equal(rsyncArgs[rsyncArgs.length - 2], "/tmp/src/");
+  assert.equal(rsyncArgs[rsyncArgs.length - 1], "/tmp/dst/");
+
+  // HMAC-SHA256 webhook verification
+  const payload = Buffer.from('{"ref":"refs/heads/main"}', "utf8");
+  const secret = "test-webhook-secret-123";
+  const goodSig = "sha256=" + crypto.createHmac("sha256", secret).update(payload).digest("hex");
+  assert.equal(githubSync.verifyGithubSignature(payload, goodSig, secret), true, "Firma HMAC válida debe pasar");
+  assert.equal(githubSync.verifyGithubSignature(payload, "sha256=" + "0".repeat(64), secret), false, "Firma distinta debe fallar");
+  assert.equal(githubSync.verifyGithubSignature(payload, goodSig, ""), false, "Sin secreto debe fallar");
+  assert.equal(githubSync.verifyGithubSignature(Buffer.from('{"ref":"other"}'), goodSig, secret), false, "Payload alterado debe fallar");
+  console.log("✓ Módulo de sincronización GitHub → robocopy/rsync + HMAC OK");
+}
+
 async function main(): Promise<void> {
   checkVersion();
   checkTwoTurnMemory();
@@ -320,6 +356,7 @@ async function main(): Promise<void> {
   checkNoBuiltInProviders();
   checkStartupScripts();
   checkAccessCodes();
+  checkGithubSyncModule();
   await checkLiveServer();
   console.log("Verificación AI Hub OK");
 }
