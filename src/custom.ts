@@ -201,10 +201,9 @@ const NOT_CHAT = [
   "tts",
   "moderation",
   "transcri",
-  "realtime",
-  "audio",
   "rerank",
-  "guard",
+  "davinci-002",
+  "babbage-002",
 ];
 const IMAGE_WORDS = ["image", "dall-e", "imagen", "flux", "gpt-image"];
 const VISION_WORDS = [
@@ -327,21 +326,29 @@ export async function fetchCustomModels(record: CustomProviderRecord): Promise<M
   if (record.id.toLowerCase().includes("ollama") || lowBase.includes(":11434")) {
     return await catalog.fetchOllamaCatalog(record.id, base);
   }
-  const resp = await api.requestJson<{ data?: Array<Record<string, unknown>> }>(
-    `${base}/models`,
-    null,
-    record.key || "",
-    30_000
-  );
-  const raw = Array.isArray(resp.data) ? resp.data : [];
+  const resp = await api.requestJson<
+    | { data?: Array<Record<string, unknown>>; models?: Array<Record<string, unknown>> }
+    | Array<Record<string, unknown>>
+  >(`${base}/models`, null, record.key || "", 30_000);
+  const raw = Array.isArray(resp)
+    ? resp
+    : Array.isArray(resp.data)
+      ? resp.data
+      : Array.isArray(resp.models)
+        ? resp.models
+        : [];
   const pid = record.id;
   const name = record.name || pid;
+  const seenIds = new Set<string>();
   const models: ModelData[] = [];
 
   for (const item of raw) {
-    const modelId = String(item.id || "").trim();
-    const category = modelId ? classify(modelId) : null;
+    const rawId = String(item.id || item.name || "").trim();
+    const modelId = rawId.startsWith("models/") ? rawId.slice("models/".length) : rawId;
+    if (!modelId || seenIds.has(modelId)) continue;
+    const category = classify(modelId);
     if (!category) continue;
+    seenIds.add(modelId);
     const vision = isVision(modelId) && category === "code";
     const tags = category === "code" ? ["herramientas"] : ["imagen"];
     if (vision) tags.push("visión");
@@ -356,19 +363,22 @@ export async function fetchCustomModels(record: CustomProviderRecord): Promise<M
       customPaid = !isFree;
       if (!isFree) tags.push("de pago");
     }
-    if (isFree) tags.push("gratis");
+    const rawCtx = Number(
+      item.context_length || item.context_window || item.input_token_limit || item.max_model_len || 0
+    );
+    const context = Number.isFinite(rawCtx) && rawCtx > 0 ? rawCtx : null;
     models.push({
       provider: pid,
       uid: modelId,
-      name: modelId,
+      name: String(item.display_name || item.displayName || modelId),
       category,
       free: isFree,
       p_in: pIn,
       p_out: pOut,
       price: isFree ? 0 : null,
       unit: category === "code" ? "1M tokens" : "imagen",
-      context: null,
-      desc: `Modelo de ${name}. ${isFree ? "gratis" : "por consultar en cuenta"}. Revisa tu cuenta para confirmar.`,
+      context,
+      desc: `Modelo de ${name}. ${isFree ? "Gratis" : "Por consultar en cuenta"}. Revisa tu cuenta para confirmar.`,
       tags,
       extra: {
         modality: vision ? "text+image->text" : "text->text",

@@ -1,12 +1,12 @@
-const CACHE_NAME = "aihub-pwa-v1.11.0";
+const CACHE_NAME = "aihub-pwa-v1.12.0";
 const APP_SHELL = [
   "/",
   "/manifest.json",
   "/pwa-192x192.png",
   "/pwa-512x512.png",
   "/apple-touch-icon.png",
-  "/static/styles.css?v=15",
-  "/static/app.js?v=16",
+  "/static/styles.css?v=16",
+  "/static/app.js?v=17",
   "/static/marin-mark-128.png",
   "/static/marin-logo.png",
 ];

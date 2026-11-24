@@ -17,7 +17,7 @@
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
   <link rel="icon" href="/static/marin-mark-128.png" type="image/png">
-  <link rel="stylesheet" href="/static/styles.css?v=15">
+  <link rel="stylesheet" href="/static/styles.css?v=16">
 </head>
 <body>
   <div id="app" hidden>
@@ -134,6 +134,10 @@
               <input type="checkbox" id="use-tools">
               <span>Acceso a archivos del proyecto</span>
             </label>
+            <label class="check" id="auto-switch-label" title="Si este modelo falla por límite de consumo, cambia automáticamente al siguiente modelo gratuito del mismo proveedor">
+              <input type="checkbox" id="auto-switch-free" checked>
+              <span>Auto-cambiar gratis si llega al límite</span>
+            </label>
             <span id="chat-status" class="status"></span>
             <button id="btn-send" class="btn primary">Enviar</button>
             <button id="btn-stop" class="btn danger" hidden>Detener</button>
@@ -189,6 +193,7 @@
           <h3>CONSUMO</h3>
           <p id="usage-text" class="usage">Elige un modelo para ver su consumo.</p>
           <p id="quota-text" class="usage-dim"></p>
+          <div id="usage-bars" class="usage-bars"></div>
         </section>
         <section class="detail-card files-card">
           <div class="files-head">
@@ -256,6 +261,6 @@
   <div id="modal-root"></div>
   <div id="toast-root"></div>
 
-  <script src="/static/app.js?v=16"></script>
+  <script src="/static/app.js?v=17"></script>
 </body>
 </html>

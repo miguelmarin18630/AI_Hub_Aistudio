@@ -23,6 +23,9 @@ const state = {
   vaultHandle: null,
   vaultFileName: "",
   vaultDiskSynced: false,
+  vaultServerSynced: false,
+  vaultSyncTimer: null,
+  quotaCache: new Map(),
   vaultLegacyOnServer: false,
   pendingBootstrapPack: null,
   group: "all",
@@ -30,6 +33,7 @@ const state = {
   search: "",
   filter: "all",
   sort: "price-asc",
+  autoSwitchFree: true,
   collapsedProviders: new Set(),
   collapsedGroups: new Set(),
   selected: null,
@@ -65,7 +69,7 @@ function defaultVault() {
     favorite_models: [],
     usage: {},
     history: { items: [], current: null },
-    prefs: { group: "all", sort: "price-asc", filter: "all", provider: null, selected_model: "" },
+    prefs: { group: "all", sort: "price-asc", filter: "all", provider: null, selected_model: "", auto_switch_free: true },
   };
 }
 
@@ -230,6 +234,68 @@ async function writeVaultToDiskHandle(handle, vault, requestPerm = false) {
   }
 }
 
+async function pushVaultToServerNow() {
+  if (!state.user || !state.vault) return false;
+  try {
+    await api("/api/vault/sync", { method: "POST", body: { vault: state.vault } });
+    state.vaultServerSynced = true;
+    return true;
+  } catch {
+    state.vaultServerSynced = false;
+    return false;
+  }
+}
+
+function scheduleServerVaultSync() {
+  if (!state.user || !state.vault) return;
+  if (state.vaultSyncTimer) clearTimeout(state.vaultSyncTimer);
+  state.vaultSyncTimer = setTimeout(() => {
+    state.vaultSyncTimer = null;
+    pushVaultToServerNow();
+  }, 450);
+}
+
+async function syncVaultWithServer(forcePull = false) {
+  if (!state.user || !state.vault) return "none";
+  try {
+    const res = await api("/api/vault/sync");
+    const localHas = vaultHasUserData(state.vault);
+    const localTs = Number(state.vault.updated_at || 0);
+    if (res && res.has_vault && res.vault) {
+      const remote = normalizeVault(res.vault);
+      const remoteHas = vaultHasUserData(remote);
+      const remoteTs = Number(remote.updated_at || res.updated_at || 0);
+      if (remoteHas && (forcePull || !localHas || remoteTs > localTs)) {
+        state.vault = remote;
+        try {
+          await idbSet(VAULT_STORE, state.user.id, state.vault);
+        } catch {
+          try {
+            localStorage.setItem(`aihub.vault.fallback.${state.user.id}`, JSON.stringify(state.vault));
+          } catch {
+            /* ignore */
+          }
+        }
+        state.vaultServerSynced = true;
+        return "pulled";
+      }
+      if (localHas && localTs > remoteTs) {
+        const ok = await pushVaultToServerNow();
+        return ok ? "pushed" : "none";
+      }
+      state.vaultServerSynced = true;
+      return "same";
+    }
+    if (localHas) {
+      const ok = await pushVaultToServerNow();
+      return ok ? "pushed" : "none";
+    }
+    return "none";
+  } catch {
+    return "none";
+  }
+}
+
 async function loadUserVault(userId) {
   let raw = null;
   try {
@@ -245,6 +311,7 @@ async function loadUserVault(userId) {
   state.vaultHandle = null;
   state.vaultFileName = "";
   state.vaultDiskSynced = false;
+  state.vaultServerSynced = false;
   try {
     const handle = await idbGet(HANDLE_STORE, userId);
     if (handle) {
@@ -256,10 +323,11 @@ async function loadUserVault(userId) {
   } catch {
     /* ignore */
   }
+  await syncVaultWithServer(false);
   return state.vault;
 }
 
-async function saveUserVault() {
+async function saveUserVault(skipServerSync = false) {
   if (!state.user || !state.vault) return;
   const userId = state.user.id;
   state.vault.updated_at = Date.now();
@@ -274,6 +342,9 @@ async function saveUserVault() {
   }
   if (state.vaultHandle) {
     await writeVaultToDiskHandle(state.vaultHandle, state.vault, false);
+  }
+  if (!skipServerSync) {
+    scheduleServerVaultSync();
   }
 }
 
@@ -1020,10 +1091,12 @@ async function startApp() {
   state.sort = prefs.sort || "price-asc";
   state.filter = prefs.filter || "all";
   state.providerFilter = prefs.provider || null;
+  state.autoSwitchFree = prefs.auto_switch_free !== false;
   state.mobile = isPhone();
   if (state.mobile) $("layout").classList.add("collapsed");
   $("sort").value = state.sort;
   $("filter").value = state.filter;
+  if ($("auto-switch-free")) $("auto-switch-free").checked = state.autoSwitchFree;
   syncTabs();
   bindEvents();
   await loadCatalog();
@@ -1057,6 +1130,7 @@ function savePrefs() {
     filter: state.filter,
     provider: state.providerFilter,
     selected_model: state.selected ? `${state.selected.provider}::${state.selected.uid}` : "",
+    auto_switch_free: state.autoSwitchFree,
   };
   localStorage.setItem("aihub.web", JSON.stringify(next));
   if (state.vault) {
@@ -1179,7 +1253,11 @@ function bindEvents() {
   $("btn-logout").addEventListener("click", logout);
 
   $("btn-clear").addEventListener("click", clearChat);
-  $("btn-send").addEventListener("click", sendChat);
+  $("btn-send").addEventListener("click", () => sendChat());
+  $("auto-switch-free")?.addEventListener("change", (event) => {
+    state.autoSwitchFree = Boolean(event.target.checked);
+    savePrefs();
+  });
   $("prompt").addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
@@ -1540,116 +1618,97 @@ function sortPaidModels(items) {
   });
 }
 
-function modelUsageStats(model) {
-    let used = 0, limit = model.context || 32768;
-    if (state.vault && state.vault.usage) {
-      const key = `${model.provider}:${model.uid}`;
-      const u = state.vault.usage[key];
-      if (u && u.prompt != null) used = u.prompt;
-    }
-    const remaining = Math.max(0, limit - used);
-    const pct = limit > 0 ? Math.round(used / limit * 100) : 0;
-    return { used, remaining, pct, limit };
+function isModelDownloadable(model) {
+  if (!model) return false;
+  if (model.extra && model.extra.downloadable) return true;
+  if (
+    model.extra &&
+    model.extra.installed === false &&
+    (String(model.provider || "").toLowerCase().includes("ollama") || model.unit === "local")
+  ) {
+    return true;
   }
-  
-  function fmtTokens(n) {
-    if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
-    if (n >= 1000) return `${Math.round(n / 1000)}K`;
-    return String(n);
-  }
-  
-  function buildModelRow(model) {
-    const row = document.createElement("div");
-    const disabled = isModelContextDisabled(model);
-    const selected = state.selected && state.selected.uid === model.uid && state.selected.provider === model.provider;
-    row.className = "model-row" + (selected ? " selected" : "") + (disabled ? " disabled" : "");
-    if (disabled) row.title = "Contexto insuficiente para la conversación actual";
-    row.dataset.uid = model.uid;
-    row.dataset.provider = model.provider;
-    const priceClass = model.free ? "free" : (model.effective_price == null ? "unknown" : "");
-    const { used, remaining, pct, limit } = modelUsageStats(model);
-    row.innerHTML = `
-      <span class="model-glyph" style="color:${esc(model.provider_color)}">${esc(model.provider_glyph)}</span>
-      <div class="model-main">
-        <div class="model-name">${esc(model.name)}</div>
-        <div class="model-sub">${esc(model.info_text)}</div>
-        <div class="model-usage">
-          <span class="usage-used">${fmtTokens(used)}</span> de <span class="usage-limit">${fmtTokens(limit)}</span>
-          <div class="usage-bar">
-            <div class="usage-progress" style="width: ${pct}%"></div>
-          </div>
-        </div>
-      </div>
-      <div class="model-price ${priceClass}">${esc(model.price_text)}</div>`;
-    return row;
-  }
+  return false;
+}
 
-function modelUsageStats(model) {
-    let used = 0, limit = model.context || 32768;
-    if (state.vault && state.vault.usage) {
-      const key = `${model.provider}:${model.uid}`;
-      const u = state.vault.usage[key];
-      if (u && u.prompt != null) used = u.prompt;
+function isModelLocalInstalled(model) {
+  return Boolean(
+    model &&
+      model.extra &&
+      model.extra.installed === true &&
+      (String(model.provider || "").toLowerCase().includes("ollama") || model.unit === "local")
+  );
+}
+
+function normTagKey(tag) {
+  const base = String(tag || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (base === "free") return "gratis";
+  if (base === "reasoning") return "razonamiento";
+  if (base === "vision") return "vision";
+  if (base === "image") return "imagen";
+  if (base === "video") return "video";
+  return base;
+}
+
+function dedupeDetailTags(model) {
+  const seen = new Set();
+  const badges = [];
+  if (model.group_label) {
+    const gKey = normTagKey(model.group_label);
+    if (gKey) {
+      seen.add(gKey);
+      for (const part of gKey.split(/\s+y\s+/)) {
+        if (part) seen.add(part.trim());
+      }
     }
-    const remaining = Math.max(0, limit - used);
-    const pct = limit > 0 ? Math.round(used / limit * 100) : 0;
-    return { used, remaining, pct, limit };
+    badges.push(model.group_label);
   }
-  
-  function maybeAutoSwitchModel(provider, currentUid) {
-    // Si no hay vault o no hay modelo seleccionado, no hacer nada
-    if (!state.vault || !state.selected) return;
-    
-    // Si el modelo actual es gratuito, verificar si se alcanzó el límite
-    const isFree = state.selected.free;
-    if (!isFree) return;
-    
-    // Obtener estadísticas de consumo del modelo actual
-    const stats = modelUsageStats(state.selected);
-    const { used, limit } = stats;
-    
-    // Si no ha habido uso, no cambiar
-    if (used === 0) return;
-    
-    // Buscar el siguiente modelo gratuito del mismo proveedor
-    const models = (state.vault.models_by_provider || {})[provider] || [];
-    const freeModels = models.filter((m) => m.free && m.uid !== currentUid);
-    
-    if (freeModels.length === 0) {
-      // No hay más modelos gratuitos, mostrar aviso
-      toast("No hay más modelos gratuitos disponibles en este proveedor.", "info");
-      return;
-    }
-    
-    // Elegir el siguiente modelo (primer modelo gratuito disponible)
-    const nextModel = freeModels[0];
-    
-    // Seleccionar el nuevo modelo en la interfaz
-    state.selected = {
-      ...state.selected,
-      uid: nextModel.uid,
-      provider: nextModel.provider,
-      name: nextModel.name,
-      context: nextModel.context,
-      free: nextModel.free,
-      price_text: nextModel.price_text,
-      info_text: nextModel.info_text,
-      provider_color: nextModel.provider_color,
-      provider_glyph: nextModel.provider_glyph,
-    };
-    
-    // Renderizar modelos actualizados
-    renderModels();
-    
-    // Enfocar el nuevo modelo seleccionado
-    const newRow = $("model-list")?.querySelector(`.model-row[data-provider="${nextModel.provider}"][data-uid="${nextModel.uid}"]`);
-    if (newRow) {
-      newRow.click();
-    }
-    
-    toast(`Cambiado automáticamente a ${nextModel.name} (gratis)`, "ok");
+  if (model.free) {
+    // Ya se muestra el precio "Gratis" en verde justo encima; evita duplicarlo en etiquetas
+    seen.add("gratis");
   }
-  
+  for (const tag of model.tags || []) {
+    const clean = String(tag || "").trim();
+    if (!clean) continue;
+    const key = normTagKey(clean);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    badges.push(clean);
+  }
+  return badges;
+}
+
+function buildModelRow(model) {
+  const row = document.createElement("div");
+  const disabled = isModelContextDisabled(model);
+  const selected = state.selected && state.selected.uid === model.uid && state.selected.provider === model.provider;
+  const downloadable = isModelDownloadable(model);
+  const installedLocal = isModelLocalInstalled(model);
+  row.className = "model-row" + (selected ? " selected" : "") + (disabled ? " disabled" : "");
+  if (disabled) row.title = "Contexto insuficiente para la conversación actual";
+  else if (downloadable) row.title = `Requiere descarga local: ollama pull ${model.uid}`;
+  row.dataset.uid = model.uid;
+  row.dataset.provider = model.provider;
+  const priceClass = model.free ? "free" : (model.effective_price == null ? "unknown" : "");
+  const badgeHtml = downloadable
+    ? `<span class="model-badge download" title="Requiere descarga antes de usar">⬇ Descargar</span>`
+    : installedLocal
+      ? `<span class="model-badge installed" title="Instalado en local">✓ Local</span>`
+      : "";
+  row.innerHTML = `
+    <span class="model-glyph" style="color:${esc(model.provider_color)}">${esc(model.provider_glyph)}</span>
+    <div class="model-main">
+      <div class="model-name"><span class="model-name-text">${esc(model.name)}</span>${badgeHtml}</div>
+      <div class="model-sub">${esc(model.info_text)}</div>
+    </div>
+    <div class="model-price ${priceClass}">${esc(model.price_text)}</div>`;
+  return row;
+}
+
 function renderModels() {
   const root = $("model-list");
   root.innerHTML = "";
@@ -1834,13 +1893,21 @@ function renderDetail() {
     root.innerHTML = `<small class="empty">Elige un modelo para ver su precio y detalles.</small>`;
     $("usage-text").textContent = "Elige un modelo para ver su consumo.";
     $("quota-text").textContent = "";
+    if ($("usage-bars")) $("usage-bars").innerHTML = "";
     return;
   }
   const isFavorite = (state.favorites || []).includes(`${model.provider}:${model.uid}`);
-  const tags = [
-    ...(model.group_label ? [`<span class="tag">${esc(model.group_label)}</span>`] : []),
-    ...(model.tags || []).map((tag) => `<span class="tag">${esc(tag)}</span>`),
-  ].join("");
+  const downloadable = isModelDownloadable(model);
+  const tags = dedupeDetailTags(model)
+    .map((tag) => `<span class="tag">${esc(tag)}</span>`)
+    .join("");
+  const downloadNotice = downloadable
+    ? `<div class="download-callout">
+         <div><strong>⬇ Este modelo requiere descarga previa</strong> en tu equipo antes de chatear con él.</div>
+         <code>ollama pull ${esc(model.uid)}</code>
+         <button type="button" id="btn-copy-pull" class="btn ghost mini" style="align-self:flex-start">📋 Copiar comando</button>
+       </div>`
+    : "";
   root.innerHTML = `
     <div class="detail-title">
       <span class="model-glyph" style="color:${esc(model.provider_color)}">${esc(model.provider_glyph)}</span>
@@ -1851,6 +1918,7 @@ function renderDetail() {
     </div>
     <div class="detail-price ${model.free ? "" : "paid"}">${esc(model.price_text)}</div>
     <div class="usage-dim">${esc(model.price_detail)}</div>
+    ${downloadNotice}
     <div class="detail-desc">${esc(model.desc || "")}</div>
     <div class="detail-tags">${tags}</div>
     <div class="usage-dim" style="margin-top:8px">${esc(model.context_text)} contexto · ${esc(model.unit)}</div>
@@ -1860,8 +1928,9 @@ function renderDetail() {
     </div>`;
   $("btn-favorite").addEventListener("click", toggleFavorite);
   $("btn-copy-id").addEventListener("click", () => copyText(model.uid));
+  $("btn-copy-pull")?.addEventListener("click", () => copyText(`ollama pull ${model.uid}`));
   $("conv-title").textContent = model.name;
-  $("conv-sub").textContent = `${model.provider_name} · ${model.group_label || ""} · ${model.price_text}`;
+  $("conv-sub").textContent = `${model.provider_name} · ${model.group_label || ""} · ${model.price_text}${downloadable ? " · ⬇ Requiere descarga" : ""}`;
   loadUsage();
 }
 
@@ -1874,7 +1943,42 @@ async function copyText(value) {
   }
 }
 
-async function loadUsage() {
+function renderUsageBarHtml({ label, pct, usedText, remainingText }) {
+  const clamped = Math.max(0, Math.min(100, Math.round(Number(pct) || 0)));
+  const tone = clamped >= 85 ? "danger" : clamped >= 60 ? "warn" : "";
+  return `
+    <div class="usage-meter">
+      <div class="usage-meter-head">
+        <strong>${esc(label)}</strong>
+        <span>${clamped}%</span>
+      </div>
+      <div class="usage-bar">
+        <div class="usage-progress ${tone}" style="width:${clamped}%"></div>
+      </div>
+      <div class="usage-meter-sub">
+        <span>Lleva: ${esc(usedText)}</span>
+        <span>Queda: ${esc(remainingText)}</span>
+      </div>
+    </div>`;
+}
+
+async function getOpenRouterQuotaCached(apiKey) {
+  if (!apiKey) return null;
+  const cached = state.quotaCache.get(apiKey);
+  if (cached && Date.now() - cached.ts < 120_000) return cached.data;
+  try {
+    const data = await api("/api/check", { method: "POST", body: { openrouter_api_key: apiKey } });
+    if (data && data.ok) {
+      state.quotaCache.set(apiKey, { ts: Date.now(), data });
+      return data;
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+async function loadUsage(refreshQuota = false) {
   const model = state.selected;
   if (!model) return;
   const stats = getLocalUsage(model.provider, model.uid);
@@ -1886,6 +1990,98 @@ async function loadUsage() {
   if (today.images) bits.push(`${today.images} imagen${today.images === 1 ? "" : "es"} hoy`);
   if (today.videos) bits.push(`${today.videos} vídeo${today.videos === 1 ? "" : "s"} hoy`);
   $("quota-text").textContent = bits.join(" · ");
+
+  const barsEl = $("usage-bars");
+  if (!barsEl) return;
+
+  const bars = [];
+  // 1. Barra de contexto actual del chat (tokens usados / restantes en la ventana del modelo)
+  if (model.category === "code") {
+    const ctxLimit = modelContextLimit(model);
+    const ctxUsed = historyTokens();
+    const ctxRem = Math.max(0, ctxLimit - ctxUsed);
+    const ctxPct = ctxLimit > 0 ? (ctxUsed / ctxLimit) * 100 : 0;
+    bars.push(
+      renderUsageBarHtml({
+        label: "Contexto del chat",
+        pct: ctxPct,
+        usedText: `~${fmtTokens(ctxUsed)} tokens`,
+        remainingText: `~${fmtTokens(ctxRem)} de ${fmtTokens(ctxLimit)}`,
+      })
+    );
+  }
+
+  // 2. Barra de cuota real del proveedor (OpenRouter gratis/créditos si hay clave)
+  const auth = getClientAuth(model.provider);
+  const isOr =
+    model.provider === "openrouter" ||
+    Boolean(auth && auth.base && auth.base.toLowerCase().includes("openrouter.ai"));
+  if (isOr && auth && auth.api_key) {
+    if (refreshQuota) state.quotaCache.delete(auth.api_key);
+    barsEl.innerHTML = bars.join("");
+    const quota = await getOpenRouterQuotaCached(auth.api_key);
+    if (!state.selected || state.selected.provider !== model.provider || state.selected.uid !== model.uid) {
+      return;
+    }
+    if (quota) {
+      if (model.free && quota.free_limit != null && Number(quota.free_limit) > 0) {
+        const lim = Number(quota.free_limit);
+        const rem = Math.max(0, Number(quota.free_remaining ?? lim));
+        const used = Math.max(0, Number(quota.free_used ?? (lim - rem)));
+        bars.push(
+          renderUsageBarHtml({
+            label: "Cuota gratis hoy (OpenRouter)",
+            pct: (used / lim) * 100,
+            usedText: `${used} pet.`,
+            remainingText: `${rem} de ${lim}`,
+          })
+        );
+      } else if (quota.limit != null && Number(quota.limit) > 0) {
+        const lim = Number(quota.limit);
+        const rem = Math.max(0, Number(quota.remaining ?? 0));
+        const used = Math.max(0, lim - rem);
+        bars.push(
+          renderUsageBarHtml({
+            label: "Límite de clave (OpenRouter)",
+            pct: (used / lim) * 100,
+            usedText: `$${used.toFixed(3)}`,
+            remainingText: `$${rem.toFixed(3)} de $${lim.toFixed(2)}`,
+          })
+        );
+      } else if (quota.credits != null && quota.total_usage != null) {
+        const rem = Math.max(0, Number(quota.credits));
+        const used = Math.max(0, Number(quota.total_usage));
+        const total = used + rem;
+        if (total > 0) {
+          bars.push(
+            renderUsageBarHtml({
+              label: "Saldo OpenRouter",
+              pct: (used / total) * 100,
+              usedText: `$${used.toFixed(3)}`,
+              remainingText: `$${rem.toFixed(3)}`,
+            })
+          );
+        }
+      }
+    }
+  } else {
+    // Barra orientativa de consumo diario local (tokens de hoy frente a la ventana del modelo)
+    const todayTokens = (today.prompt || 0) + (today.completion || 0);
+    const refCap = Math.max(modelContextLimit(model), 32768);
+    if (todayTokens > 0 || today.requests > 0) {
+      const rem = Math.max(0, refCap - todayTokens);
+      bars.push(
+        renderUsageBarHtml({
+          label: "Consumo hoy (modelo)",
+          pct: (todayTokens / refCap) * 100,
+          usedText: `${fmtTokens(todayTokens)} tok · ${today.requests || 0} pet.`,
+          remainingText: todayTokens >= refCap ? "Límite orientativo superado" : `${fmtTokens(rem)} tok`,
+        })
+      );
+    }
+  }
+
+  barsEl.innerHTML = bars.join("");
 }
 
 async function toggleFavorite() {
@@ -2229,26 +2425,60 @@ async function openHelp() {
   }
 }
 
-async function sendChat() {
+function isQuotaOrLimitError(message) {
+  const low = String(message || "").toLowerCase();
+  return /(429|402|rate[\s_-]?limit|too many requests|quota|cuota|l[ií]mite|agotado|sin saldo|cr[eé]dito|credit|exhausted|exceeded|insufficient_quota|free-models-per-day|demasiadas peticiones)/i.test(
+    low
+  );
+}
+
+function findNextFreeModel(providerId, excludeUids = []) {
+  const excluded = new Set(excludeUids);
+  const candidates = state.models.filter(
+    (m) =>
+      m.provider === providerId &&
+      m.category === "code" &&
+      m.free &&
+      !excluded.has(m.uid) &&
+      !isModelDownloadable(m)
+  );
+  if (!candidates.length) return null;
+  const currentGroup = state.selected ? modelGroupId(state.selected) : null;
+  const sameGroup = currentGroup
+    ? candidates.filter((m) => modelGroupId(m) === currentGroup)
+    : [];
+  const pool = sortFreeModels(sameGroup.length ? sameGroup : candidates);
+  return pool[0] || null;
+}
+
+async function sendChat(retryCtx = null) {
   if (state.busy) return;
   const model = state.selected;
-  const text = $("prompt").value.trim();
+  const isRetry = Boolean(retryCtx);
+  const text = isRetry ? retryCtx.text : $("prompt").value.trim();
   if (!model) { toast("Elige un modelo primero.", "error"); return; }
   if (!text) return;
-  state.messages.push({ role: "user", content: text });
-  addMessage("user", text);
-  $("prompt").value = "";
-  $("prompt").style.height = "auto";
+  if (!isRetry) {
+    state.messages.push({ role: "user", content: text });
+    addMessage("user", text);
+    $("prompt").value = "";
+    $("prompt").style.height = "auto";
+    updateConvContext();
+  }
+
+  const tried = isRetry ? [...retryCtx.tried] : [model.uid];
+  const attempts = isRetry ? retryCtx.attempts : 0;
 
   const assistant = addMessage("assistant", "");
   const body = assistant.querySelector(".msg-body");
   body.innerHTML = `<span class="cursor"></span>`;
   let answer = "";
+  let streamErrorMsg = "";
   state.busy = true;
   state.controller = new AbortController();
   $("btn-send").disabled = true;
   $("btn-stop").hidden = false;
-  $("chat-status").textContent = "Pensando…";
+  $("chat-status").textContent = isRetry ? `Reintentando con ${model.name}…` : "Pensando…";
 
   try {
     const project = state.project;
@@ -2302,15 +2532,16 @@ async function sendChat() {
             const uText = describeLocalUsage(localStats);
             $("chat-status").textContent = `Listo en ${event.elapsed}s · ${uText}`;
             updateConvContext(event.context);
-            // Auto-switch to next free model if current model reached consumption limit
-            maybeAutoSwitchModel(model.provider, model.uid);
-            loadUsage();
+            loadUsage(true);
             loadFiles();
           } else if (event.type === "error") {
-            addMessage("error", event.message);
+            streamErrorMsg = String(event.message || "Error al responder.");
           }
         }
       }
+    }
+    if (streamErrorMsg && !answer.trim()) {
+      throw new Error(streamErrorMsg);
     }
     if (answer.trim()) {
       state.messages.push({ role: "assistant", content: answer });
@@ -2323,10 +2554,36 @@ async function sendChat() {
     } else {
       assistant.remove();
     }
+    if (streamErrorMsg && answer.trim()) {
+      addMessage("error", streamErrorMsg);
+    }
   } catch (exc) {
     if (exc.name !== "AbortError") {
       if (!answer.trim()) assistant.remove();
-      addMessage("error", exc.message);
+      const errMsg = exc.message || "Error inesperado.";
+      const autoEnabled = Boolean($("auto-switch-free") ? $("auto-switch-free").checked : state.autoSwitchFree);
+      if (!answer.trim() && autoEnabled && isQuotaOrLimitError(errMsg) && attempts < 3) {
+        const nextModel = findNextFreeModel(model.provider, tried);
+        if (nextModel) {
+          addMessage(
+            "system",
+            `↻ ${model.name} alcanzó el límite de consumo. Cambiando automáticamente a ${nextModel.name}…`
+          );
+          toast(`Cambiado automáticamente a ${nextModel.name} (gratis)`, "ok");
+          selectModel(nextModel, false);
+          state.busy = false;
+          state.controller = null;
+          $("btn-send").disabled = false;
+          $("btn-stop").hidden = true;
+          await sendChat({ text, tried: [...tried, nextModel.uid], attempts: attempts + 1 });
+          return;
+        }
+        addMessage(
+          "system",
+          `⚠ ${model.name} alcanzó el límite y no quedan más modelos gratuitos en ${model.provider_name}.`
+        );
+      }
+      addMessage("error", errMsg);
       $("chat-status").textContent = "";
     } else {
       if (answer.trim()) {
@@ -2345,6 +2602,7 @@ async function sendChat() {
     $("btn-stop").hidden = true;
     await saveConversation();
     renderModels();
+    loadUsage();
   }
 }
 
@@ -2671,30 +2929,33 @@ async function openSettings(tab = "main") {
     ? state.vaultDiskSynced
       ? `<span class="vault-badge">● Sincronizado con ${esc(state.vaultFileName)}</span>`
       : `<span class="vault-badge warn">● Archivo vinculado (${esc(state.vaultFileName)}) · pulsa Guardar para reactivar permiso</span>`
-    : `<span class="vault-badge">● Guardado en tu disco duro local</span>`;
+    : state.vaultServerSynced
+      ? `<span class="vault-badge">● Sincronizado entre PC y móvil</span>`
+      : `<span class="vault-badge">● Guardado en tu disco duro local</span>`;
 
   openModal(`
     <div class="modal-head"><h2>Ajustes</h2><button class="icon-btn" data-close>Cerrar ✕</button></div>
     <section id="settings-vault">
-      <h3>MIS DATOS (DISCO DURO LOCAL)</h3>
+      <h3>MIS DATOS Y SINCRONIZACIÓN</h3>
       <div class="vault-box">
         <div class="vault-head">
           <div>
-            <strong>Tus proveedores, claves, modelos e historial solo se guardan en tu propio equipo</strong>
+            <strong>Tus proveedores, claves, modelos e historial se sincronizan entre tus dispositivos (PC y móvil) en tu propio servidor</strong>
             <div class="vault-meta">${customProviders.length} proveedor${customProviders.length === 1 ? "" : "es"} añadido${customProviders.length === 1 ? "" : "s"} · ${cachedCount} modelos en caché · ${histCount} conversacion${histCount === 1 ? "" : "es"} · ${favCount} favoritos</div>
           </div>
           ${diskBadge}
         </div>
         <div class="vault-actions">
+          <button id="btn-vault-sync-now" class="btn primary small">🔄 Sincronizar dispositivos ahora</button>
           ${supportsDiskFileSync() ? `
-            <button id="btn-vault-link" class="btn primary small">📁 ${state.vaultFileName ? "Cambiar archivo en disco" : "Vincular archivo en mi disco"}</button>
+            <button id="btn-vault-link" class="btn ghost small">📁 ${state.vaultFileName ? "Cambiar archivo en disco" : "Vincular archivo en mi disco"}</button>
             <button id="btn-vault-open" class="btn ghost small">📂 Abrir archivo del disco</button>
           ` : ""}
           <button id="btn-vault-export" class="btn ghost small">⬇ Exportar copia (.json)</button>
           <button id="btn-vault-import" class="btn ghost small">⬆ Importar copia (.json)</button>
           ${state.vaultLegacyOnServer ? `<button id="btn-vault-wipe-server" class="btn danger small">🗑 Borrar copia antigua del servidor</button>` : ""}
         </div>
-        <p class="hint" style="margin:0">Si cambias de ordenador, usa «Exportar copia (.json)» o abre tu archivo vinculado para recuperar al instante tus proveedores, claves e historial.</p>
+        <p class="hint" style="margin:0">Al iniciar sesión con el mismo usuario desde el móvil u otro navegador, tus proveedores y modelos se sincronizan automáticamente. También puedes exportar o vincular una copia local (.json).</p>
       </div>
     </section>
     <section id="settings-main">
@@ -2806,6 +3067,24 @@ async function openSettings(tab = "main") {
   $("preset").addEventListener("change", syncPreset);
   syncPreset();
 
+  root.querySelector("#btn-vault-sync-now")?.addEventListener("click", async () => {
+    const mode = await syncVaultWithServer(false);
+    syncStateFromVault();
+    renderProviders();
+    renderModels();
+    renderDetail();
+    if (mode === "pulled") {
+      toast("Proveedores y modelos descargados desde tu cuenta.", "ok");
+    } else if (mode === "pushed") {
+      toast("Proveedores y modelos subidos para sincronizar con tus otros dispositivos.", "ok");
+    } else if (mode === "same") {
+      await pushVaultToServerNow();
+      toast("Tus dispositivos ya están sincronizados.", "ok");
+    } else {
+      toast("No se pudo sincronizar ahora mismo.", "error");
+    }
+    await openSettings("main");
+  });
   root.querySelector("#btn-vault-link")?.addEventListener("click", async () => {
     const ok = await linkHardDriveFile();
     if (ok) await openSettings("main");

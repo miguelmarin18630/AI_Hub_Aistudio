@@ -361,7 +361,7 @@ interface AuthedRequest extends Request {
 const app = express();
 app.set("trust proxy", true);
 app.use(cookieParser());
-app.use(express.json({ limit: "4mb" }));
+app.use(express.json({ limit: "16mb" }));
 
 // Security headers (iframe-compatible for AI Studio preview)
 app.use((_req, res, next) => {
@@ -620,6 +620,55 @@ app.get("/api/vault/legacy", (req: AuthedRequest, res) => {
       history,
     },
   });
+});
+
+function vaultSyncPath(): string {
+  return path.join(config.appDir(), "vault.json");
+}
+
+app.get("/api/vault/sync", (req: AuthedRequest, res) => {
+  if (!requireUser(req, res)) return;
+  res.setHeader("Cache-Control", "no-store");
+  const target = vaultSyncPath();
+  if (!fs.existsSync(target)) {
+    res.json({ ok: true, has_vault: false, vault: null, updated_at: 0 });
+    return;
+  }
+  try {
+    const raw = JSON.parse(fs.readFileSync(target, "utf-8")) as Record<string, unknown>;
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      res.json({ ok: true, has_vault: false, vault: null, updated_at: 0 });
+      return;
+    }
+    res.json({
+      ok: true,
+      has_vault: true,
+      vault: raw,
+      updated_at: Number(raw.updated_at || 0),
+    });
+  } catch {
+    res.json({ ok: true, has_vault: false, vault: null, updated_at: 0 });
+  }
+});
+
+app.post("/api/vault/sync", (req: AuthedRequest, res) => {
+  if (!requireUser(req, res)) return;
+  const incoming = req.body?.vault;
+  if (!incoming || typeof incoming !== "object" || Array.isArray(incoming)) {
+    res.status(400).json({ error: "Formato de bóveda no válido." });
+    return;
+  }
+  const serialized = JSON.stringify(incoming);
+  if (serialized.length > 15 * 1024 * 1024) {
+    res.status(413).json({ error: "Los datos locales superan el límite de sincronización." });
+    return;
+  }
+  const target = vaultSyncPath();
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  const tmp = `${target}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(tmp, serialized, { encoding: "utf-8", mode: 0o600 });
+  fs.renameSync(tmp, target);
+  res.json({ ok: true, updated_at: Number((incoming as Record<string, unknown>).updated_at || Date.now()) });
 });
 
 app.post("/api/vault/wipe-server", (req: AuthedRequest, res) => {

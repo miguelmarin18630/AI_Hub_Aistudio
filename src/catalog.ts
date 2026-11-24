@@ -77,26 +77,51 @@ const OLLAMA_CURATED: Array<[string, string, string]> = [
     "Muy bueno en código para su tamaño; cabe en 8 GB de RAM.",
   ],
   [
+    "qwen2.5-coder:14b",
+    "Programación · avanzado, 9 GB",
+    "Excelente en código complejo y refactorización con 16 GB de RAM.",
+  ],
+  [
     "qwen3-coder:30b",
     "Programación · potente, ~19 GB",
     "Nivel avanzado si tienes una GPU con suficiente VRAM.",
+  ],
+  [
+    "devstral:24b",
+    "Programación · agente, 14 GB",
+    "Modelo de Mistral diseñado para tareas de programación y agentes.",
+  ],
+  [
+    "codestral:22b",
+    "Programación · 13 GB",
+    "Especializado en código de Mistral con buena ventana de contexto.",
   ],
   [
     "deepseek-coder-v2:16b",
     "Programación · 8,9 GB",
     "Fuerte en lenguajes de programación y refactorización.",
   ],
+  ["codellama:7b", "Programación · 3,8 GB", "Especializado en código, ligero y veterano."],
+  ["starcoder2:7b", "Programación · 4 GB", "Entrenado con código; bueno para completar funciones."],
+  ["qwen3:8b", "General · moderno, 5,2 GB", "Excelente chat y razonamiento equilibrado en local."],
+  ["qwen2.5:7b", "General · 4,7 GB", "Muy sólido en español, resúmenes y seguimiento de instrucciones."],
   ["llama3.2:3b", "General · ligero, 2 GB", "Rápido para chat general y tareas de texto."],
+  ["llama3.3:70b", "General · gran formato, 43 GB", "Calidad de nivel frontier en local si dispones de mucha VRAM/RAM."],
+  ["mistral:7b", "General · 4,4 GB", "Clásico fiable para tareas generales."],
+  ["mistral-small3.1:24b", "General · multimodal, 15 GB", "Potente en texto e imágenes con contexto amplio."],
   [
     "gemma3:4b",
     "General · multimodal, 3,3 GB",
     "Acepta imágenes y texto; buena relación tamaño/calidad.",
   ],
+  [
+    "gemma3:12b",
+    "General · multimodal, 8,1 GB",
+    "Gran calidad en texto e imágenes para equipos con 16 GB de RAM.",
+  ],
   ["phi4:14b", "Razonamiento · 9,1 GB", "Buen razonamiento matemático y técnico en local."],
   ["deepseek-r1:8b", "Razonamiento · 4,9 GB", "Modelo de razonamiento paso a paso en local."],
-  ["mistral:7b", "General · 4,4 GB", "Clásico fiable para tareas generales."],
-  ["codellama:7b", "Programación · 3,8 GB", "Especializado en código, ligero y veterano."],
-  ["starcoder2:7b", "Programación · 4 GB", "Entrenado con código; bueno para completar funciones."],
+  ["deepseek-r1:14b", "Razonamiento · 9 GB", "Razonamiento más profundo en matemáticas y lógica."],
   [
     "llava:7b",
     "Visión · 4,7 GB",
@@ -114,6 +139,57 @@ const OLLAMA_CURATED: Array<[string, string, string]> = [
   ],
   ["moondream:latest", "Visión · 1,7 GB", "Visión muy ligera para describir imágenes rápido."],
 ];
+
+function isOllamaModel(model: ModelData): boolean {
+  return (
+    model.provider === "ollama" ||
+    model.provider.toLowerCase().includes("ollama") ||
+    model.unit === "local"
+  );
+}
+
+function normTagKey(tag: string): string {
+  const base = String(tag || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (base === "free") return "gratis";
+  if (base === "reasoning") return "razonamiento";
+  if (base === "vision") return "vision";
+  if (base === "image") return "imagen";
+  if (base === "video") return "video";
+  return base;
+}
+
+export function cleanModelTags(
+  rawTags: string[] | undefined,
+  groupLabel?: string,
+  isFree?: boolean
+): string[] {
+  const seen = new Set<string>();
+  if (groupLabel) {
+    const gKey = normTagKey(groupLabel);
+    if (gKey) seen.add(gKey);
+    // Avoid duplicating "visión" when group is "Visión y multimodal" or "chat" when "Chat y texto"
+    for (const part of gKey.split(/\s+y\s+/)) {
+      if (part) seen.add(part.trim());
+    }
+  }
+  if (isFree) {
+    seen.add("gratis");
+  }
+  const out: string[] = [];
+  for (const tag of rawTags || []) {
+    const clean = String(tag || "").trim();
+    if (!clean) continue;
+    const key = normTagKey(clean);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(clean);
+  }
+  return out;
+}
 
 const IMAGE_UNIT: Record<string, string> = {
   image: "imagen",
@@ -185,7 +261,7 @@ export function priceText(model: ModelData): string {
 }
 
 export function priceDetail(model: ModelData): string {
-  if (model.provider === "ollama") return "Local y gratis · usa tu propio hardware";
+  if (isOllamaModel(model)) return "Local y gratis · usa tu propio hardware";
   if (model.free) return "Gratis · 0 $ por millón de tokens";
   if (model.category === "code") {
     if (model.extra?.variable_price) {
@@ -236,12 +312,12 @@ export function infoText(model: ModelData): string {
     const gw = map[String(model.extra?.gateway || "")];
     if (gw) bits.push(gw);
   }
-  if (model.provider === "ollama") {
+  if (isOllamaModel(model)) {
     if (model.extra?.installed) {
       const sz = humanSize(model.extra?.size);
       bits.push(sz ? `Instalado · ${sz}` : "Instalado");
     } else {
-      bits.push("Descargable");
+      bits.push("Requiere descarga");
     }
   }
   if (model.category === "code" && model.context) {
@@ -346,7 +422,7 @@ export function relevanceScore(model: ModelData): number {
   if (tags.has("con audio")) score += 8;
   if (tags.has("imagen→vídeo")) score += 8;
 
-  if (model.provider === "ollama" && model.extra?.installed) {
+  if (isOllamaModel(model) && model.extra?.installed) {
     score += 25;
   }
 
@@ -385,10 +461,12 @@ export function relevanceScore(model: ModelData): number {
 
 export function modelPayload(model: ModelData, provider?: ProviderInfo): ModelPayload {
   const group = classifyGroup(model);
+  const groupLabel = GROUP_LABELS[group] || "Chat y texto";
   return {
     ...model,
+    tags: cleanModelTags(model.tags, groupLabel, model.free),
     group,
-    group_label: GROUP_LABELS[group] || "Chat y texto",
+    group_label: groupLabel,
     price_text: priceText(model),
     price_detail: priceDetail(model),
     context_text: fmtContext(model.context),
@@ -506,14 +584,16 @@ export function buildOpenRouterText(raw: Array<Record<string, unknown>>): ModelD
     const outputs = Array.isArray(arch.output_modalities)
       ? (arch.output_modalities as string[])
       : ["text"];
-    if (outputs.some((k) => ["image", "video", "audio"].includes(k))) continue;
+    if (!outputs.includes("text") && outputs.some((k) => ["image", "video", "audio"].includes(k))) {
+      continue;
+    }
     const pricing = (item.pricing || {}) as Record<string, unknown>;
     const rawIn = toNum(pricing.prompt);
     const rawOut = toNum(pricing.completion);
     const perRequest = toNum(pricing.request) || 0;
     const pIn = rawIn == null || rawIn < 0 ? null : Number((rawIn * 1_000_000).toFixed(6));
     const pOut = rawOut == null || rawOut < 0 ? null : Number((rawOut * 1_000_000).toFixed(6));
-    const free = pIn === 0 && pOut === 0 && perRequest <= 0;
+    const free = (pIn === 0 && pOut === 0 && perRequest <= 0) || uid.endsWith(":free");
     const variable = (rawIn != null && rawIn < 0) || (rawOut != null && rawOut < 0);
     const supported = Array.isArray(item.supported_parameters)
       ? (item.supported_parameters as string[])
@@ -522,16 +602,10 @@ export function buildOpenRouterText(raw: Array<Record<string, unknown>>): ModelD
       ? (arch.input_modalities as string[])
       : ["text"];
     const tags: string[] = [];
-    const tagsLower = new Set();
-    if (free) {
-      if (!tagsLower.has("gratis")) { tags.push("gratis"); tagsLower.add("gratis"); }
-    }
-    if (item.reasoning) {
-      if (!tagsLower.has("razonamiento")) { tags.push("razonamiento"); tagsLower.add("razonamiento"); }
-    }
+    if (free) tags.push("gratis");
+    if (item.reasoning || supported.includes("reasoning")) tags.push("razonamiento");
     if (supported.includes("tools")) tags.push("herramientas");
     if (inputs.includes("image")) tags.push("visión");
-    if (uid.endsWith(":free")) tags.push("free");
     models.push({
       provider: "openrouter",
       uid,
@@ -720,9 +794,9 @@ export function buildOllama(tags: Array<Record<string, unknown>>): ModelData[] {
       price: 0,
       unit: "local",
       context: null,
-      desc: `${desc} Se descarga una vez y funciona sin conexión.`,
-      tags: ["local", "descargable", ...(label ? [label] : [])],
-      extra: { installed: false },
+      desc: `${desc} Requiere descarga local (ollama pull ${name}) y funciona sin conexión.`,
+      tags: ["local", "requiere descarga", ...(label ? [label] : [])],
+      extra: { installed: false, downloadable: true },
     });
   }
   return models;

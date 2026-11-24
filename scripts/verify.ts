@@ -95,7 +95,36 @@ function checkCatalogRelevanceAndPayload(): void {
   assert.equal(payload.price_text, "Gratis");
   assert.equal(payload.group, "code");
   assert.equal(payload.group_label, "Programación");
-  console.log(`✓ Relevancia y payload de catálogo OK (${strongScore} > ${routerScore})`);
+  // Check tag deduplication (no repeated Razonamiento or Gratis/free)
+  const reasoningModel: ModelData = {
+    ...strongFree,
+    uid: "deepseek/deepseek-r1:free",
+    name: "DeepSeek R1",
+    tags: ["gratis", "free", "razonamiento", "Razonamiento", "herramientas"],
+  };
+  const rPayload = catalog.modelPayload(reasoningModel);
+  assert.equal(rPayload.group, "reasoning");
+  assert.ok(!rPayload.tags.some((t) => /gratis|free|razonamiento/i.test(t)), "No debe repetir Razonamiento ni Gratis en tags");
+  // Check custom_ollama downloadable marker
+  const ollamaDown: ModelData = {
+    provider: "custom_ollama",
+    uid: "qwen3:8b",
+    name: "qwen3:8b",
+    category: "code",
+    free: true,
+    p_in: 0,
+    p_out: 0,
+    price: 0,
+    unit: "local",
+    context: null,
+    desc: "Modelo local.",
+    tags: ["local", "requiere descarga"],
+    extra: { installed: false, downloadable: true },
+  };
+  const oPayload = catalog.modelPayload(ollamaDown);
+  assert.ok(oPayload.info_text.includes("Requiere descarga"), "Debe marcar modelos Ollama no instalados como Requiere descarga");
+  assert.ok(oPayload.price_detail.includes("Local y gratis"), "Debe reconocer custom_ollama en price_detail");
+  console.log(`✓ Relevancia, etiquetas sin duplicados y marcador descargable OK (${strongScore} > ${routerScore})`);
 }
 
 function checkModelGroups(): void {

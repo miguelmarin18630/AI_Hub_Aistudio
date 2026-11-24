@@ -62,14 +62,20 @@ if "!LOCAL_REV!"=="!REMOTE_REV!" (
 )
 
 echo [AI Hub] Nuevos cambios detectados en GitHub. Actualizando carpeta...
-git pull --ff-only origin main
+git pull --ff-only origin main >nul 2>nul
 if errorlevel 1 (
-  if "%AUTO_MODE%"=="0" (
-    echo [AI Hub] Hay cambios locales sin subir que impiden actualizar automaticamente.
-    echo Revisa con "git status" antes de volver a intentarlo.
-    pause
+  echo [AI Hub] Detectados cambios o historial divergente. Intentando sincronizar con rebase...
+  git pull --rebase --autostash origin main
+  if errorlevel 1 (
+    git rebase --abort >nul 2>nul
+    if "%AUTO_MODE%"=="0" (
+      echo [AI Hub] Hay conflictos entre tus cambios locales y GitHub que requieren revision manual.
+      echo          Si quieres descartar los cambios locales y dejar la copia exacta de GitHub ejecuta:
+      echo          git fetch origin main ^&^& git reset --hard origin/main
+      pause
+    )
+    exit /b 1
   )
-  exit /b 1
 )
 
 REM Reinstalar dependencias solo si cambio package.json
