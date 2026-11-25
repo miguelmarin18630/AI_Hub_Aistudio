@@ -909,6 +909,27 @@ app.post("/api/project/select", (req: AuthedRequest, res) => {
   });
 });
 
+app.post("/api/project/browse", (req: AuthedRequest, res) => {
+  const user = requireUser(req, res);
+  if (!user) return;
+  const cfg = config.loadConfig();
+  const root = projects.projectRoot(cfg);
+  // Open the folder in the system file explorer
+  try {
+    const { exec } = require("node:child_process");
+    if (process.platform === "win32") {
+      exec(`explorer "${root}"`);
+    } else if (process.platform === "darwin") {
+      exec(`open "${root}"`);
+    } else {
+      exec(`xdg-open "${root}"`);
+    }
+  } catch {
+    // ignore errors opening explorer
+  }
+  res.json({ ok: true, path: root, name: path.basename(root) });
+});
+
 app.post("/api/project/create", (req: AuthedRequest, res) => {
   if (!requireUser(req, res)) return;
   const cfg = config.loadConfig();
@@ -1296,7 +1317,9 @@ app.post("/api/chat", async (req: AuthedRequest, res) => {
   const clientAuth = parseClientAuth(data.client_auth);
   const providers = new Map(providerList(cfg).map((p) => [p.id, p]));
   const hasClientCustom = Boolean(clientAuth && clientAuth.base);
-  if (!providers.has(providerId) && !hasClientCustom) {
+  // Ollama is a built-in local provider that doesn't need a custom record
+  const isOllamaProvider = providerId === "ollama" || providerId.toLowerCase().includes("ollama");
+  if (!providers.has(providerId) && !hasClientCustom && !isOllamaProvider) {
     res.status(400).json({ error: "Proveedor desconocido." });
     return;
   }

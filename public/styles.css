@@ -604,6 +604,8 @@ label > input, label > select { margin-top: 4px; }
 .usage-progress.danger { background: var(--red); }
 .detail-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .table-wrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+/* Provider actions should wrap instead of forcing horizontal scroll */
+.user-actions { display: flex; flex-wrap: wrap; gap: 4px; }
 .data-path { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .account-data { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 6px 0 10px; }
 .account-data strong { font-size: 13px; }
@@ -895,7 +897,8 @@ kbd {
   .modal-row .btn { width: 100%; }
   .modal-actions { flex-wrap: wrap; }
   .modal-actions .btn { flex: 1 1 auto; }
-  .user-table { min-width: 560px; }
+  .user-table { min-width: 0; }
+  .user-table td { white-space: normal; word-break: break-word; }
   .history-list { max-height: 58vh; }
   .history-row { flex-wrap: wrap; }
   .history-actions { width: 100%; justify-content: flex-end; }

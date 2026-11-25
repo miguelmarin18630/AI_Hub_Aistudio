@@ -165,7 +165,7 @@ export function isAutoSyncEnabled(): boolean {
   const envFlag = String(process.env.AIHUB_AUTO_SYNC || "").trim().toLowerCase();
   if (envFlag === "0" || envFlag === "false" || envFlag === "off") return false;
   if (envFlag === "1" || envFlag === "true" || envFlag === "on") return true;
-  return process.platform === "win32";
+  return false;
 }
 
 export function isRobocopySuccess(exitCode: number): boolean {

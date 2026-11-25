@@ -2697,11 +2697,11 @@ function openProjects() {
         <input id="new-project" type="text" placeholder="Nombre del proyecto nuevo">
         <button id="btn-create-project" class="btn primary" style="flex:0 0 auto">Crear</button>
       </div>
-      ${canOpen ? `
       <div class="modal-row">
         <input id="open-path" type="text" placeholder="Abrir otra carpeta (ruta completa, p. ej. C:\\Proyectos\\Mi carpeta)">
         <button id="btn-open-path" class="btn ghost" style="flex:0 0 auto">Abrir</button>
-      </div>` : ""}
+        <button id="btn-browse-folder" class="btn ghost" style="flex:0 0 auto">Explorar</button>
+      </div>
       <div class="modal-actions">
         <button class="btn ghost" id="btn-no-project">Sin proyecto</button>
       </div>
@@ -2740,6 +2740,14 @@ function openProjects() {
         await loadFiles();
         toast(`Carpeta: ${data.name}`, "ok");
         closeModal();
+      } catch (exc) { toast(exc.message, "error"); }
+    });
+    $("btn-browse-folder")?.addEventListener("click", async () => {
+      try {
+        const data = await api("/api/project/browse", { method: "POST" });
+        if (data.path) {
+          $("open-path").value = data.path;
+        }
       } catch (exc) { toast(exc.message, "error"); }
     });
   }
