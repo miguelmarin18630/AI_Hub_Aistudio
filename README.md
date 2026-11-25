@@ -84,6 +84,8 @@ Al seleccionar un preset se rellena la URL base y una ayuda orientativa. Los pro
 - Conversar o generar imágenes/vídeos **no necesita proyecto**.
 - Si seleccionas o creas un proyecto (botón **Proyecto** en la cabecera) y activas la casilla **Acceso a archivos del proyecto**, los modelos compatibles con herramientas pueden listar, leer, crear y editar archivos dentro de esa carpeta (nunca fuera ni dentro de `.git`).
 - Cada acción aparece en la conversación (`⚙ list_files`, `⚙ read_file`, `⚙ write_file`, `⚙ replace_in_file`).
+- Al **crear un proyecto nuevo** se crea la carpeta dentro de tu carpeta de proyectos (`C:\Proyectos` en Windows) y, si eres administrador, también un **repositorio en GitHub** (`https://github.com/miguelmarin18630/<proyecto>`) con un primer commit y el contenido subido. Puedes desmarcar la casilla si solo quieres la carpeta local.
+- Para crear repositorios, AI Hub usa el token indicado en `github_token` de la configuración, la variable de entorno `GITHUB_TOKEN`/`AIHUB_GITHUB_TOKEN` o, si no hay ninguno, las credenciales de Git ya guardadas en el equipo (Git Credential Manager). El token nunca se escribe en la URL del repositorio ni en los mensajes de error.
 
 ---
 
@@ -157,6 +159,7 @@ AI_Hub_Aistudio/
 │  ├─ chat.ts                 contexto de conversación (turnos, recorte y tokens)
 │  ├─ agent.ts                bucle de herramientas sobre archivos del proyecto
 │  ├─ projects.ts             gestión y lectura segura de proyectos
+│  ├─ github.ts               creación de repositorios GitHub para proyectos nuevos
 │  └─ usage.ts                registro y reinicio de consumo por modelo
 ├─ public/
 │  ├─ index.html              interfaz principal y pantallas de login/setup

@@ -1,4 +1,4 @@
-const CACHE_NAME = "aihub-pwa-v1.13.0";
+const CACHE_NAME = "aihub-pwa-v1.14.0";
 const APP_SHELL = [
   "/",
   "/manifest.json",

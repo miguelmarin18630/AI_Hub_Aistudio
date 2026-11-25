@@ -6,6 +6,7 @@ import * as access from "../src/access.ts";
 import * as catalog from "../src/catalog.ts";
 import * as chat from "../src/chat.ts";
 import * as custom from "../src/custom.ts";
+import * as github from "../src/github.ts";
 import * as githubSync from "../src/sync.ts";
 import { APP_VERSION } from "../src/types.ts";
 import type { ChatMessage, ModelData } from "../src/types.ts";
@@ -345,6 +346,34 @@ function checkGithubSyncModule(): void {
   console.log("✓ Módulo de sincronización GitHub → robocopy/rsync + HMAC OK");
 }
 
+function checkProjectRepoModule(): void {
+  // Nombres de repositorio válidos a partir del nombre del proyecto
+  assert.equal(github.sanitizeRepoName("Mi Proyecto Ñandú"), "Mi-Proyecto-Nandu");
+  assert.equal(github.sanitizeRepoName("  app   web  "), "app-web");
+  assert.equal(github.sanitizeRepoName(""), "proyecto");
+  assert.equal(github.sanitizeRepoName("  "), "proyecto");
+  assert.equal(github.sanitizeRepoName("proyecto/con:raros*"), "proyecto-con-raros");
+
+  // URL pública del repositorio
+  assert.equal(
+    github.repoWebUrl("miguelmarin18630", "Mi-Proyecto.git"),
+    "https://github.com/miguelmarin18630/Mi-Proyecto"
+  );
+  assert.equal(github.repoWebUrl("", "Mi-Proyecto"), "");
+
+  // Los tokens nunca deben aparecer en los mensajes de error
+  const leak =
+    "fatal: unable to access 'https://x-access-token:ghp_1234567890abcdef@github.com/miguelmarin18630/x.git/'";
+  const safe = github.redactSecrets(leak);
+  assert.ok(!safe.includes("ghp_1234567890abcdef"), "El token debe quedar oculto");
+  assert.ok(!safe.includes("x-access-token:ghp_"), "La URL con token debe quedar oculta");
+
+  // Mensajes de error en español según el código de GitHub
+  assert.ok(github.describeGithubError(403, "").includes("repo"));
+  assert.ok(github.describeGithubError(401, "").includes("credenciales"));
+  console.log("✓ Módulo de repositorios GitHub (nombre, URL y secretos) OK");
+}
+
 async function main(): Promise<void> {
   checkVersion();
   checkTwoTurnMemory();
@@ -357,6 +386,7 @@ async function main(): Promise<void> {
   checkStartupScripts();
   checkAccessCodes();
   checkGithubSyncModule();
+  checkProjectRepoModule();
   await checkLiveServer();
   console.log("Verificación AI Hub OK");
 }

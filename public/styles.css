@@ -663,6 +663,7 @@ label > input, label > select { margin-top: 4px; }
 .modal-row > * { flex: 1 1 140px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 .hint { color: var(--muted); font-size: 11px; margin: 4px 0 0; }
+.github-new { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
 
 .user-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .user-table th, .user-table td { text-align: left; padding: 6px; border-bottom: 1px solid var(--border); }

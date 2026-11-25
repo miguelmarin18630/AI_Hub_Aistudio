@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.13.0";
+export const APP_VERSION = "1.14.0";
 
 export type ModelGroup = "code" | "reasoning" | "vision" | "chat" | "image" | "video";
 
@@ -95,6 +95,12 @@ export interface UserConfig {
   custom_providers: CustomProviderRecord[];
   usage: Record<string, UsageStats>;
   favorite_models: string[];
+  /** Token de GitHub para crear repositorios (opcional; si falta se usan las credenciales de Git). */
+  github_token?: string;
+  /** Cuenta de GitHub donde crear los repositorios. */
+  github_owner?: string;
+  /** Crear los repositorios nuevos como privados (por defecto, sí). */
+  github_repo_private?: boolean;
   [key: string]: unknown;
 }
 

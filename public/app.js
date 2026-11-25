@@ -793,7 +793,7 @@ function markdown(text) {
     const cleaned = code.replace(/\n$/, "");
     const idx = blocks.length;
     blocks.push(
-      `<div class="code-block"><div class="code-bar"><span>${esc(lang || "código")}</span><button type="button" class="msg-copy-btn code-copy-btn">Copiar</button></div><pre><code>${esc(cleaned)}</code></pre></div>`
+      `<div class="code-block"><div class="code-bar"><span>${esc(lang || "código")}</span><button type="button" class="msg-copy-btn code-copy-btn">Copiar</button><button type="button" class="msg-copy-btn code-download-btn" data-download-code>Descargar</button></div><pre><code>${esc(cleaned)}</code></pre></div>`
     );
     return `\u0000CODEBLOCK_${idx}\u0000`;
   });
@@ -1280,6 +1280,20 @@ function bindEvents() {
     if (msgBtn) {
       const msg = msgBtn.closest(".msg");
       copyText(msg?.dataset.raw || msg?.querySelector(".msg-body")?.textContent || "");
+      return;
+    }
+    const dlBtn = event.target.closest("[data-download-code]");
+    if (dlBtn) {
+      const code = dlBtn.closest(".code-block")?.querySelector("code")?.textContent || "";
+      const lang = dlBtn.closest(".code-block")?.querySelector(".code-bar span")?.textContent || "txt";
+      const ext = lang === "python" ? "py" : lang === "javascript" ? "js" : lang === "typescript" ? "ts" : lang === "html" ? "html" : lang === "css" ? "css" : lang === "json" ? "json" : lang === "bash" || lang === "shell" ? "sh" : "txt";
+      const blob = new Blob([code], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `codigo.${ext}`;
+      a.click();
+      URL.revokeObjectURL(url);
       return;
     }
     if (event.target.closest(".error-open-settings")) {
@@ -2122,7 +2136,7 @@ function addMessage(kind, text) {
   if (kind === "user" || kind === "assistant") {
     item.dataset.raw = text || "";
     item.innerHTML = `<div class="msg-body"></div>` +
-      (kind === "assistant" && text ? `<div class="msg-actions"><button type="button" class="msg-copy-btn" data-copy-msg>Copiar</button></div>` : "");
+      (text ? `<div class="msg-actions"><button type="button" class="msg-copy-btn" data-copy-msg>Copiar</button></div>` : "");
     item.querySelector(".msg-body").innerHTML = kind === "user" ? esc(text) : markdown(text);
   } else if (kind === "error" && /ajustes|clave/i.test(String(text || ""))) {
     item.innerHTML = `<span>${esc(text)}</span><button type="button" class="btn ghost mini error-action error-open-settings">Abrir Ajustes</button>`;
@@ -2685,6 +2699,7 @@ function openProjects() {
       </td>
     </tr>`).join("");
   const canOpen = state.user.role === "admin" || state.user.desktop;
+  const isAdmin = state.user.role === "admin";
   openModal(`
     <div class="modal-head"><h2>Proyectos</h2><button class="icon-btn" data-close>Cerrar ✕</button></div>
     <section>
@@ -2697,6 +2712,12 @@ function openProjects() {
         <input id="new-project" type="text" placeholder="Nombre del proyecto nuevo">
         <button id="btn-create-project" class="btn primary" style="flex:0 0 auto">Crear</button>
       </div>
+      ${isAdmin ? `
+      <div class="github-new">
+        <label class="check"><input type="checkbox" id="new-project-github" checked> Crear también el repositorio en GitHub</label>
+        <label class="check"><input type="checkbox" id="new-project-private" checked> Repositorio privado</label>
+        <p class="hint" id="github-hint">Comprobando la cuenta de GitHub…</p>
+      </div>` : ""}
       <div class="modal-row">
         <input id="open-path" type="text" placeholder="Abrir otra carpeta (ruta completa, p. ej. C:\\Proyectos\\Mi carpeta)">
         <button id="btn-open-path" class="btn ghost" style="flex:0 0 auto">Abrir</button>
@@ -2720,14 +2741,46 @@ function openProjects() {
   $("btn-create-project").addEventListener("click", async () => {
     const name = $("new-project").value.trim();
     if (!name) return;
+    const btn = $("btn-create-project");
+    const wantsRepo = isAdmin && $("new-project-github")?.checked !== false;
+    const isPrivate = $("new-project-private")?.checked !== false;
+    btn.disabled = true;
+    btn.textContent = "Creando…";
     try {
-      const data = await api("/api/project/create", { method: "POST", body: { name } });
+      const data = await api("/api/project/create", {
+        method: "POST",
+        body: { name, create_repo: wantsRepo, private: isPrivate },
+      });
       applyProjects(data.projects);
-      toast("Proyecto creado.", "ok");
+      state.filePath = "";
+      localStorage.setItem("aihub.project", state.project);
       await loadFiles();
-      closeModal();
-    } catch (exc) { toast(exc.message, "error"); }
+      if (data.repo || data.repo_error) {
+        showProjectCreated(data);
+      } else {
+        toast(`Proyecto creado en ${data.workdir}`, "ok");
+        closeModal();
+      }
+    } catch (exc) {
+      toast(exc.message, "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Crear";
+    }
   });
+  if (isAdmin) {
+    api("/api/github/status").then((status) => {
+      const hint = $("github-hint");
+      if (!hint) return;
+      hint.textContent = status.available
+        ? `GitHub: ${status.login || status.owner} · ${status.message}`
+        : `GitHub no disponible: ${status.message}`;
+      hint.style.color = status.available ? "" : "var(--warn)";
+    }).catch(() => {
+      const hint = $("github-hint");
+      if (hint) hint.textContent = "No se pudo comprobar la cuenta de GitHub.";
+    });
+  }
   if (canOpen) {
     $("btn-open-path").addEventListener("click", async () => {
       const path = $("open-path").value.trim();
@@ -2751,6 +2804,35 @@ function openProjects() {
       } catch (exc) { toast(exc.message, "error"); }
     });
   }
+}
+
+function showProjectCreated(data) {
+  const repo = data.repo || null;
+  const repoHtml = repo
+    ? `<p class="hint">Repositorio: <a href="${esc(repo.url)}" target="_blank" rel="noopener">${esc(repo.full_name)}</a>${repo.pushed ? "" : " · contenido pendiente de subir"}</p>`
+    : "";
+  const warningHtml = repo && repo.warning
+    ? `<p class="hint" style="color:var(--warn)">${esc(repo.warning)}</p>`
+    : "";
+  const errorHtml = data.repo_error
+    ? `<p class="hint" style="color:var(--warn)">${esc(data.repo_error)}</p>`
+    : "";
+  openModal(`
+    <div class="modal-head"><h2>Proyecto creado</h2><button class="icon-btn" data-close>Cerrar ✕</button></div>
+    <section>
+      <p class="hint">Carpeta: <code>${esc(data.workdir)}</code></p>
+      ${repoHtml}
+      ${warningHtml}
+      ${errorHtml}
+      <div class="modal-actions">
+        ${repo ? '<button class="btn ghost" id="btn-copy-repo">Copiar enlace del repositorio</button>' : ""}
+        <button class="btn primary" data-close>Listo</button>
+      </div>
+    </section>`);
+  $("modal-root").querySelectorAll("[data-close]").forEach((button) => {
+    button.addEventListener("click", closeModal);
+  });
+  $("btn-copy-repo")?.addEventListener("click", () => copyText(repo.url));
 }
 
 async function chooseProject(id) {

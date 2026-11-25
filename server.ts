@@ -11,6 +11,7 @@ import * as catalog from "./src/catalog.ts";
 import * as chat from "./src/chat.ts";
 import * as config from "./src/config.ts";
 import * as custom from "./src/custom.ts";
+import * as github from "./src/github.ts";
 import * as projects from "./src/projects.ts";
 import * as githubSync from "./src/sync.ts";
 import { APP_VERSION } from "./src/types.ts";
@@ -930,17 +931,52 @@ app.post("/api/project/browse", (req: AuthedRequest, res) => {
   res.json({ ok: true, path: root, name: path.basename(root) });
 });
 
-app.post("/api/project/create", (req: AuthedRequest, res) => {
+app.get("/api/github/status", async (req: AuthedRequest, res, next) => {
   if (!requireUser(req, res)) return;
-  const cfg = config.loadConfig();
-  const target = projects.createProject(projects.projectRoot(cfg), String(req.body?.name || ""));
-  config.updateConfig({ workdir: target });
-  res.json({
-    ok: true,
-    workdir: target,
-    name: path.basename(target),
-    projects: projectsPayload(config.loadConfig()),
-  });
+  try {
+    res.setHeader("Cache-Control", "no-store");
+    res.json(await github.githubStatus(config.loadConfig()));
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post("/api/project/create", async (req: AuthedRequest, res, next) => {
+  const user = requireUser(req, res);
+  if (!user) return;
+  try {
+    const cfg = config.loadConfig();
+    const target = projects.createProject(projects.projectRoot(cfg), String(req.body?.name || ""));
+    config.updateConfig({ workdir: target });
+    const wantsRepo = req.body?.create_repo !== false && user.role === "admin";
+    let repo: github.CreatedRepo | null = null;
+    let repoError = "";
+    if (wantsRepo) {
+      try {
+        repo = await github.createProjectRepo({
+          folder: target,
+          name: path.basename(target),
+          isPrivate:
+            typeof req.body?.private === "boolean"
+              ? req.body.private
+              : cfg.github_repo_private !== false,
+          cfg,
+        });
+      } catch (err) {
+        repoError = (err as Error).message;
+      }
+    }
+    res.json({
+      ok: true,
+      workdir: target,
+      name: path.basename(target),
+      repo,
+      repo_error: repoError,
+      projects: projectsPayload(config.loadConfig()),
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 app.get("/api/files", (req: AuthedRequest, res) => {
